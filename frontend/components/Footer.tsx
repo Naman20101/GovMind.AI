@@ -15,7 +15,7 @@ export default function Footer() {
             </span>
           </div>
           <div className="flex flex-col items-center gap-1">
-            <p className="text-white/70 text-sm">Government Services, Automated.</p>
+            <p className="text-white/70 text-sm">Government Services, Automated with AI.</p>
             <p className="text-white/40 text-xs">All decisions are auditable and human-reversible</p>
           </div>
           <div className="flex items-center gap-6 text-sm text-white/50">
