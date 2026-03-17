@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap');
+
+:root {
+  --navy: #1B4F72;
+  --navy-deep: #0D2B3E;
+  --navy-mid: #154360;
+  --white: #FFFFFF;
+  --gray-bg: #F4F6F9;
+  --green: #27AE60;
+  --red: #E74C3C;
+  --amber: #F39C12;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background-color: var(--gray-bg);
+  color: var(--navy-deep);
+}
+
+.font-serif { font-family: 'Instrument Serif', serif; }
+
+.hero-gradient {
+  background: linear-gradient(135deg, #0D2B3E 0%, #1B4F72 50%, #154360 100%);
+  background-size: 400% 400%;
+  animation: gradientShift 12s ease infinite;
+}
+
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.glass {
+  background: rgba(255,255,255,0.07);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.animate-fade-up  { animation: fadeUp  0.6s cubic-bezier(0.16,1,0.3,1) forwards; opacity: 0; }
+.animate-fade-in  { animation: fadeIn  0.5s ease forwards; opacity: 0; }
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-600 { animation-delay: 0.6s; }
+
+@layer components {
+  .badge           { @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase; }
+  .badge-pending   { @apply bg-amber-50 text-amber-700 border border-amber-200; }
+  .badge-approved  { @apply bg-green-50 text-green-700 border border-green-200; }
+  .badge-flagged   { @apply bg-red-50 text-red-600 border border-red-200; }
+  .badge-rejected  { @apply bg-red-50 text-red-600 border border-red-200; }
+  .badge-human_review { @apply bg-blue-50 text-blue-700 border border-blue-200; }
+  .card  { @apply bg-white rounded-2xl shadow-card border border-gray-100 p-6; }
+  .input { @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4F72]/20 focus:border-[#1B4F72] transition-all duration-200 bg-white; }
+  .label { @apply block text-sm font-medium text-gray-700 mb-1.5; }
+}
+
+::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar-track { background: #EEF2F7; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--navy); }
