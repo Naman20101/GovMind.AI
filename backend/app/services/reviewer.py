@@ -140,3 +140,4 @@ def auto_review_business_permit(file_path: str) -> dict:
         "masked_data": masked,
         "audit_trace": audit_trace,
         "human_review_link": "/admin/permits/review?trace_id=" + audit_trace["trace_id"]
+    }
