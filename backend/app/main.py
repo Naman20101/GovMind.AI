@@ -24,19 +24,32 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="GovMind.AI API",
     version="1.0.0",
-    description="AI-powered government permit processing",
     lifespan=lifespan
 )
 
+# ✅ CORS — allow everything, locked down properly
+origins = settings.get_cors_origins()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.get_cors_origins(),
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=86400,
 )
 
 app.include_router(permits.router)
+
+
+@app.get("/")
+def root():
+    return {
+        "name": "GovMind.AI API",
+        "status": "running",
+        "version": "1.0.0"
+    }
 
 
 @app.get("/health")
@@ -46,6 +59,18 @@ def health():
         "environment": settings.ENVIRONMENT,
         "timestamp": datetime.utcnow().isoformat()
     }
+
+
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(rest_of_path: str):
+    return JSONResponse(
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
 
 
 @app.exception_handler(RequestValidationError)
