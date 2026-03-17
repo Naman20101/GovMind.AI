@@ -50,9 +50,8 @@ export default function AuditTraceViewer({ trace, applicationId }: Props) {
   const entries: TraceEntry[] = !trace
     ? []
     : Array.isArray(trace)
-      ? trace as TraceEntry[]
-      : [trace as unknown as TraceEntry]
-
+      ? (trace as unknown) as TraceEntry[]
+      : [(trace as unknown) as TraceEntry]
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-card overflow-hidden">
       <button
