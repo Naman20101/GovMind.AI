@@ -83,7 +83,7 @@ def auto_review_business_permit(file_path: str) -> dict:
             prompt = build_review_prompt(raw_data)
 
             message = client.messages.create(
-                model="claude-opus-4-6",
+                model="claude-3-5-haiku-20241022",
                 max_tokens=512,
                 messages=[
                     {
