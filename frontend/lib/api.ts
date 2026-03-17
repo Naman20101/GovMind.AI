@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 export interface PermitResponse {
   id: string
@@ -42,24 +42,55 @@ export class ApiError extends Error {
   }
 }
 
+// Fetch with timeout — prevents hanging on Render cold start
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 60000
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+    return response
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new ApiError(
+        'Request timed out. The server may be waking up — please try again in 30 seconds.',
+        408
+      )
+    }
+    throw new ApiError(
+      'Cannot connect to server. Please check your connection and try again.',
+      0
+    )
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new ApiError(body.error || 'Request failed', res.status)
+    throw new ApiError(body.error || `Request failed with status ${res.status}`, res.status)
   }
   return res.json()
 }
 
 export async function submitPermit(formData: FormData): Promise<PermitResponse> {
-  const res = await fetch(`${BASE_URL}/api/v1/permits/submit`, {
-    method: 'POST',
-    body: formData,
-  })
+  const res = await fetchWithTimeout(
+    `${BASE_URL}/api/v1/permits/submit`,
+    { method: 'POST', body: formData },
+    90000 // 90 seconds for AI processing
+  )
   return handle<PermitResponse>(res)
 }
 
 export async function getPermit(id: string): Promise<PermitResponse> {
-  const res = await fetch(`${BASE_URL}/api/v1/permits/${id}`)
+  const res = await fetchWithTimeout(`${BASE_URL}/api/v1/permits/${id}`)
   return handle<PermitResponse>(res)
 }
 
@@ -72,7 +103,7 @@ export async function getAllPermits(
   if (status) params.append('status', status)
   params.append('limit', String(limit))
   params.append('offset', String(offset))
-  const res = await fetch(`${BASE_URL}/api/v1/permits/all?${params}`)
+  const res = await fetchWithTimeout(`${BASE_URL}/api/v1/permits/all?${params}`)
   return handle<PermitListItem[]>(res)
 }
 
@@ -80,10 +111,13 @@ export async function reviewPermit(
   id: string,
   body: HumanReviewRequest
 ): Promise<PermitResponse> {
-  const res = await fetch(`${BASE_URL}/api/v1/permits/${id}/review`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  const res = await fetchWithTimeout(
+    `${BASE_URL}/api/v1/permits/${id}/review`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }
+  )
   return handle<PermitResponse>(res)
 }
