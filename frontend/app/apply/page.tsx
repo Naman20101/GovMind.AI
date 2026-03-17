@@ -46,14 +46,13 @@ export default function ApplyPage() {
       fd.append('file', form.file)
       const result = await submitPermit(fd)
       router.push(`/status/${result.id}`)
-    } catch (e: unknown) {
-  if (e instanceof Error) {
-    setError(e.message)
-  } else {
-    setError('Submission failed. Please try again.')
-  }
-}
-
+    
+} catch (e: unknown) {
+    if (e instanceof Error) {
+      setError(e.message)
+    } else {
+      setError('Submission failed. Please try again.')
+    }
   return (
     <div className="max-w-2xl mx-auto px-6 py-12">
       <div className="mb-10">
