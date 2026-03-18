@@ -1,5 +1,4 @@
-const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'https://govmind-ai.onrender.com').replace(/\/$/, '')
-
+const BASE_URL = ''  // Empty — use Vercel routes now
 export interface PermitResponse {
   id: string
   business_name: string
@@ -71,16 +70,15 @@ async function handle<T>(res: Response): Promise<T> {
 }
 
 export async function submitPermit(formData: FormData): Promise<PermitResponse> {
-  const res = await fetchWithTimeout(
-    `${BASE_URL}/api/v1/permits/submit`,
-    { method: 'POST', body: formData },
-    120000
-  )
+  const res = await fetch('/api/submit', {  // Vercel route
+    method: 'POST',
+    body: formData,
+  })
   return handle<PermitResponse>(res)
 }
 
 export async function getPermit(id: string): Promise<PermitResponse> {
-  const res = await fetchWithTimeout(`${BASE_URL}/api/v1/permits/${id}`)
+  const res = await fetch(`/api/permits/${id}`)  // Vercel route
   return handle<PermitResponse>(res)
 }
 
@@ -93,7 +91,9 @@ export async function getAllPermits(
   if (status) params.append('status', status)
   params.append('limit', String(limit))
   params.append('offset', String(offset))
-  const res = await fetchWithTimeout(`${BASE_URL}/api/v1/permits/all?${params}`)
+  const res = await fetch(
+    `https://govmind-ai.onrender.com/api/v1/permits/all?${params}`
+  )
   return handle<PermitListItem[]>(res)
 }
 
@@ -101,13 +101,10 @@ export async function reviewPermit(
   id: string,
   body: HumanReviewRequest
 ): Promise<PermitResponse> {
-  const res = await fetchWithTimeout(
-    `${BASE_URL}/api/v1/permits/${id}/review`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }
-  )
+  const res = await fetch(`/api/permits/${id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
   return handle<PermitResponse>(res)
 }
