@@ -1,4 +1,4 @@
-const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'https://govmind-ai.onrender.com').replace(/\/$/, '')
 
 export interface PermitResponse {
   id: string
