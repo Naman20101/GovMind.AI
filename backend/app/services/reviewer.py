@@ -10,12 +10,10 @@ def auto_review_business_permit(file_path: str) -> dict:
 
     documents = masked.get("documents", [])
     raw_text = masked.get("raw_text", "").lower()
-
     issues = []
 
     if len(documents) < 3:
         issues.append("insufficient supporting documents")
-
     if not masked.get("tax_id"):
         issues.append("missing Tax ID")
 
@@ -29,14 +27,14 @@ def auto_review_business_permit(file_path: str) -> dict:
         confidence = round(random.uniform(91.0, 97.0), 1)
         reason = (
             f"Application flagged for human review: {', '.join(issues)}. "
-            f"Please resubmit with complete and valid documentation."
+            f"Please resubmit with complete documentation."
         )
     else:
         decision = "APPROVED"
         confidence = round(random.uniform(88.0, 95.0), 1)
         reason = (
             "All regulatory criteria met. Required documents are present "
-            "and no compliance issues were detected. Application approved."
+            "and no compliance issues detected. Application approved."
         )
 
     audit_trace = log_audit_decision(decision, reason, confidence)
@@ -47,7 +45,5 @@ def auto_review_business_permit(file_path: str) -> dict:
         "decision": decision,
         "masked_data": masked,
         "audit_trace": audit_trace,
-        "human_review_link": (
-            "/admin/permits/review?trace_id=" + audit_trace["trace_id"]
-        )
+        "human_review_link": "/admin/permits/review?trace_id=" + audit_trace["trace_id"]
     }
