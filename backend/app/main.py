@@ -39,7 +39,21 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=86400,
 )
-app.include_router(permits.router)
+@app.middleware("http")
+async def add_cors_header(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return JSONResponse(
+            content={"message": "OK"},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+            }
+        )
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
+    app.include_router(permits.router)
 
 
 @app.get("/")
