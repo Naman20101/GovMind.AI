@@ -20,3 +20,23 @@ export async function GET(
     )
   }
 }
+  export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json()
+    const response = await fetch(
+      `${BACKEND}/api/v1/permits/${params.id}/review`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }
+    )
+    const data = await response.json()
+    return NextResponse.json(data, { status: response.status })
+  } catch (_error) {
+    return NextResponse.json({ error: 'Failed to connect' }, { status: 500 })
+  }
+  }
