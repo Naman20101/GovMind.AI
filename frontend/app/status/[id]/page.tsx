@@ -47,16 +47,30 @@ export default function StatusPage() {
   const load = async () => {
     setLoading(true)
     setError('')
-    try {
-      const data = await getPermit(id)
-      setPermit(data)
-    } catch (_e) {
-      setError('Application not found or server is unavailable.')
-    } finally {
-      setLoading(false)
-    }
-  }
 
+    // Wake up Render first
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`)
+    } catch (_e) {
+      // ignore
+    }
+
+    // Try 5 times with 3 second gaps
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const data = await getPermit(id)
+        setPermit(data)
+        setLoading(false)
+        return
+      } catch (_e) {
+        if (attempt < 4) {
+          await new Promise((r) => setTimeout(r, 3000))
+        }
+      }
+    }
+    setError('Application not found or server is unavailable.')
+    setLoading(false)
+  }
   useEffect(() => {
     if (id) load()
   }, [id])
