@@ -84,7 +84,7 @@ export async function submitPermit(formData: FormData): Promise<PermitResponse> 
   const res = await fetchWithTimeout(
     `${BASE_URL}/api/v1/permits/submit`,
     { method: 'POST', body: formData },
-    90000 // 90 seconds for AI processing
+    120000 // 120 seconds for AI process:
   )
   return handle<PermitResponse>(res)
 }
