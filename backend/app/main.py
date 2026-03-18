@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import create_engine
 
@@ -63,20 +63,27 @@ except Exception as e:
 
 
 @app.get("/")
+@app.head("/")
 def root():
-    return {
-        "name": "GovMind.AI API",
-        "status": "running",
-        "version": "1.0.0"
-    }
+    return {"name": "GovMind.AI API", "status": "running"}
 
-@app.api_route("/health", methods=["GET", "HEAD"])
+
+# ✅ Accept both GET and HEAD — fixes UptimeRobot 405 error
+@app.get("/health")
+@app.head("/health")
 def health():
     return {
         "status": "ok",
         "environment": settings.ENVIRONMENT,
         "timestamp": datetime.utcnow().isoformat()
     }
+
+
+@app.get("/ping")
+@app.head("/ping")
+def ping():
+    return Response(content="pong", media_type="text/plain")
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_handler(request: Request, exc: RequestValidationError):
