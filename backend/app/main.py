@@ -70,15 +70,13 @@ def root():
         "version": "1.0.0"
     }
 
-
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {
         "status": "ok",
         "environment": settings.ENVIRONMENT,
         "timestamp": datetime.utcnow().isoformat()
     }
-
 
 @app.exception_handler(RequestValidationError)
 async def validation_handler(request: Request, exc: RequestValidationError):
