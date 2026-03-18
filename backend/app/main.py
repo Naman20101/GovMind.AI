@@ -10,7 +10,6 @@ from sqlalchemy import create_engine
 
 from app.core.config import settings
 from app.models.permit import Base
-from app.routers import permits
 
 engine = create_engine(settings.DATABASE_URL)
 
@@ -27,9 +26,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# ✅ CORS — allow everything, locked down properly
-origins = settings.get_cors_origins()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,6 +35,8 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=86400,
 )
+
+
 @app.middleware("http")
 async def add_cors_header(request: Request, call_next):
     if request.method == "OPTIONS":
@@ -53,7 +51,15 @@ async def add_cors_header(request: Request, call_next):
     response = await call_next(request)
     response.headers["Access-Control-Allow-Origin"] = "*"
     return response
+
+
+# Safe router import
+try:
+    from app.routers import permits
     app.include_router(permits.router)
+    print("✅ Permits router loaded successfully")
+except Exception as e:
+    print(f"❌ ROUTER IMPORT ERROR: {repr(e)}")
 
 
 @app.get("/")
@@ -72,18 +78,6 @@ def health():
         "environment": settings.ENVIRONMENT,
         "timestamp": datetime.utcnow().isoformat()
     }
-
-
-@app.options("/{rest_of_path:path}")
-async def preflight_handler(rest_of_path: str):
-    return JSONResponse(
-        content={"message": "OK"},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
 
 
 @app.exception_handler(RequestValidationError)
