@@ -10,6 +10,8 @@ import Link from 'next/link'
 import AuditTraceViewer from '@/components/AuditTraceViewer'
 import { getPermit, reviewPermit, type PermitResponse } from '@/lib/api'
 
+const API = 'https://govmind-ai.onrender.com'
+
 function StatusIcon({ status }: { status: string }) {
   const map: Record<string, { icon: typeof Clock; color: string; bg: string }> = {
     PENDING:      { icon: Clock,         color: 'text-[#F39C12]', bg: 'bg-amber-50' },
@@ -37,48 +39,65 @@ const statusColor: Record<string, string> = {
 
 export default function StatusPage() {
   const params = useParams()
-  const id = params?.id as string
   const [permit, setPermit] = useState<PermitResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [reviewLoading, setReviewLoading] = useState(false)
   const [reviewed, setReviewed] = useState(false)
   const [error, setError] = useState('')
+  const [attempts, setAttempts] = useState(0)
 
-  const load = async () => {
+  // ✅ CORE FIX: Extract id safely, handle undefined on first render
+  const id = params?.id
+  const safeId = Array.isArray(id) ? id[0] : id
+
+  const load = async (permitId: string) => {
     setLoading(true)
     setError('')
 
-    // Wake up Render first
+    // Wake Render
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`)
-    } catch (_e) {
-      // ignore
-    }
+      await fetch(`${API}/health`)
+    } catch (_e) { /* ignore */ }
 
-    // Try 5 times with 3 second gaps
-    for (let attempt = 0; attempt < 5; attempt++) {
+    // Retry 8 times with 3 second gaps
+    for (let attempt = 0; attempt < 8; attempt++) {
       try {
-        const data = await getPermit(id)
-        setPermit(data)
-        setLoading(false)
-        return
-      } catch (_e) {
-        if (attempt < 4) {
-          await new Promise((r) => setTimeout(r, 3000))
+        setAttempts(attempt + 1)
+        const res = await fetch(`${API}/api/v1/permits/${permitId}`)
+        if (res.ok) {
+          const data = await res.json()
+          setPermit(data)
+          setLoading(false)
+          return
         }
+      } catch (_e) {
+        // continue retrying
+      }
+      if (attempt < 7) {
+        await new Promise(r => setTimeout(r, 3000))
       }
     }
+
     setError('Application not found or server is unavailable.')
     setLoading(false)
   }
+
+  // ✅ CORE FIX: Only run when safeId is a real UUID, not undefined
   useEffect(() => {
-    if (id) load()
-  }, [id])
+    if (
+      safeId &&
+      safeId !== 'undefined' &&
+      safeId.length > 10
+    ) {
+      load(safeId)
+    }
+  }, [safeId])
 
   const requestReview = async () => {
+    if (!safeId) return
     setReviewLoading(true)
     try {
-      const updated = await reviewPermit(id, {
+      const updated = await reviewPermit(safeId, {
         decision: 'HUMAN_REVIEW',
         reason: 'Requested by applicant for manual review',
         reviewed_by: 'applicant',
@@ -92,14 +111,26 @@ export default function StatusPage() {
     }
   }
 
+  // ✅ CORE FIX: Show loading while waiting for params to hydrate
+  if (!safeId || safeId === 'undefined') {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-[#1B4F72] animate-spin mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">Loading application...</p>
+        </div>
+      </div>
+    )
+  }
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="text-center">
         <Loader2 className="w-8 h-8 text-[#1B4F72] animate-spin mx-auto mb-3" />
-        <p className="text-gray-500 text-sm">Loading application...</p>
+        <p className="text-gray-500 text-sm">Processing your application...</p>
         <p className="text-gray-400 text-xs mt-1">
-  AI is processing — retrying automatically, please wait...
-</p>
+          Attempt {attempts}/8 — please wait up to 30 seconds
+        </p>
       </div>
     </div>
   )
@@ -110,7 +141,13 @@ export default function StatusPage() {
       <h2 className="text-xl font-semibold text-gray-700 mb-2">
         Application Not Found
       </h2>
-      <p className="text-gray-400 mb-6">{error}</p>
+      <p className="text-gray-400 mb-4">{error}</p>
+      <button
+        onClick={() => load(safeId)}
+        className="mb-4 text-sm text-[#1B4F72] underline block mx-auto"
+      >
+        Try again
+      </button>
       <Link
         href="/apply"
         className="bg-[#1B4F72] text-white px-6 py-2.5 rounded-xl font-medium inline-flex hover:bg-[#154360] transition-all"
@@ -152,9 +189,7 @@ export default function StatusPage() {
             <Clock className="w-3 h-3" />
             Submitted{' '}
             {new Date(permit.submitted_at).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
+              month: 'short', day: 'numeric', year: 'numeric',
             })}
           </span>
         </div>
@@ -165,19 +200,13 @@ export default function StatusPage() {
         <div className="card animate-fade-up delay-100">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-[#1B4F72]">🤖 AI Decision</h2>
-            <span
-              className={`badge ${
-                permit.ai_decision === 'APPROVED'
-                  ? 'badge-approved'
-                  : permit.ai_decision === 'FLAGGED'
-                  ? 'badge-flagged'
-                  : 'badge-pending'
-              }`}
-            >
+            <span className={`badge ${
+              permit.ai_decision === 'APPROVED' ? 'badge-approved' :
+              permit.ai_decision === 'FLAGGED' ? 'badge-flagged' : 'badge-pending'
+            }`}>
               {permit.ai_decision}
             </span>
           </div>
-
           {permit.ai_confidence != null && (
             <div className="mb-4">
               <div className="flex justify-between text-xs text-gray-500 mb-1.5">
@@ -194,13 +223,11 @@ export default function StatusPage() {
               </div>
             </div>
           )}
-
           {permit.ai_reason && (
             <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-xl p-4 mb-4">
               {permit.ai_reason}
             </p>
           )}
-
           {reviewed ? (
             <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-4 py-3 rounded-xl">
               <CheckCircle className="w-4 h-4" />
@@ -213,15 +240,9 @@ export default function StatusPage() {
               className="w-full flex items-center justify-center gap-2 border border-[#1B4F72] text-[#1B4F72] px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#1B4F72] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
             >
               {reviewLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Requesting...
-                </>
+                <><Loader2 className="w-4 h-4 animate-spin" />Requesting...</>
               ) : (
-                <>
-                  <Users className="w-4 h-4" />
-                  Request Human Review
-                </>
+                <><Users className="w-4 h-4" />Request Human Review</>
               )}
             </button>
           )}
@@ -232,29 +253,23 @@ export default function StatusPage() {
       <div className="card animate-fade-up delay-200">
         <div className="flex items-center gap-2 mb-4">
           <Lock className="w-4 h-4 text-[#1B4F72]" />
-          <h2 className="font-semibold text-[#1B4F72]">
-            Your Protected Information
-          </h2>
+          <h2 className="font-semibold text-[#1B4F72]">Your Protected Information</h2>
         </div>
         <div className="space-y-3">
           {[
             { label: 'Owner', value: permit.owner_name_masked },
             { label: 'Tax ID', value: permit.tax_id_masked },
             { label: 'Address', value: permit.address_masked },
-          ].map(
-            ({ label, value }) =>
-              value && (
-                <div
-                  key={label}
-                  className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0"
-                >
-                  <span className="text-sm text-gray-500">{label}</span>
-                  <span className="flex items-center gap-1.5 text-sm font-medium text-[#1B4F72] font-mono">
-                    <Lock className="w-3 h-3 text-gray-300" />
-                    {value}
-                  </span>
-                </div>
-              )
+          ].map(({ label, value }) =>
+            value && (
+              <div key={label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                <span className="text-sm text-gray-500">{label}</span>
+                <span className="flex items-center gap-1.5 text-sm font-medium text-[#1B4F72] font-mono">
+                  <Lock className="w-3 h-3 text-gray-300" />
+                  {value}
+                </span>
+              </div>
+            )
           )}
         </div>
       </div>
@@ -267,9 +282,8 @@ export default function StatusPage() {
         />
       </div>
 
-      {/* Refresh */}
       <button
-        onClick={load}
+        onClick={() => load(safeId)}
         className="w-full flex items-center justify-center gap-2 text-sm text-gray-400 hover:text-[#1B4F72] py-3 transition-colors"
       >
         <RefreshCw className="w-3.5 h-3.5" />
