@@ -42,31 +42,21 @@ export class ApiError extends Error {
   }
 }
 
-// Fetch with timeout — prevents hanging on Render cold start
 async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
-  timeoutMs = 60000
+  timeoutMs = 120000
 ): Promise<Response> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    })
+    const response = await fetch(url, { ...options, signal: controller.signal })
     return response
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new ApiError(
-        'Request timed out. The server may be waking up — please try again in 30 seconds.',
-        408
-      )
+      throw new ApiError('Server is waking up — please try again in 30 seconds.', 408)
     }
-    throw new ApiError(
-      'Cannot connect to server. Please check your connection and try again.',
-      0
-    )
+    throw new ApiError('Cannot connect to server. Please try again.', 0)
   } finally {
     clearTimeout(timeout)
   }
@@ -84,7 +74,7 @@ export async function submitPermit(formData: FormData): Promise<PermitResponse> 
   const res = await fetchWithTimeout(
     `${BASE_URL}/api/v1/permits/submit`,
     { method: 'POST', body: formData },
-    120000 // 120 seconds for AI process:
+    120000
   )
   return handle<PermitResponse>(res)
 }
