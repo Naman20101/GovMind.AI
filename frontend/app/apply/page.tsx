@@ -59,7 +59,6 @@ export default function ApplyPage() {
       return form.address && form.city && form.state && form.zip
     return !!form.file
   }
-
   const handleSubmit = async () => {
     if (!form.file) {
       setError('Please upload a document.')
@@ -67,6 +66,16 @@ export default function ApplyPage() {
     }
     setLoading(true)
     setError('')
+
+    // Wake up Render before submitting
+    try {
+      setError('Connecting to server...')
+      await fetch('https://govmind-ai.onrender.com/health')
+      setError('')
+    } catch (_e) {
+      // continue anyway
+    }
+
     try {
       const fd = new FormData()
       fd.append('business_name', form.business_name)
@@ -84,12 +93,13 @@ export default function ApplyPage() {
       if (e instanceof Error) {
         setError(e.message)
       } else {
-        setError('Submission failed. Please try again.')
+        setError('Submission failed. Please try again in 30 seconds.')
       }
     } finally {
       setLoading(false)
     }
   }
+  
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-12">
