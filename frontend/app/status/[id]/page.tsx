@@ -97,7 +97,9 @@ export default function StatusPage() {
       <div className="text-center">
         <Loader2 className="w-8 h-8 text-[#1B4F72] animate-spin mx-auto mb-3" />
         <p className="text-gray-500 text-sm">Loading application...</p>
-        <p className="text-gray-400 text-xs mt-1">This may take up to 30 seconds</p>
+        <p className="text-gray-400 text-xs mt-1">
+  AI is processing — retrying automatically, please wait...
+</p>
       </div>
     </div>
   )
