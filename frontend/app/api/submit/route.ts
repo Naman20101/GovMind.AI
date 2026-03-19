@@ -1,4 +1,4 @@
-submit/route.ts
+//submit/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 
 export const maxDuration = 60
