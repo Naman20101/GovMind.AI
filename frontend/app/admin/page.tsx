@@ -30,7 +30,8 @@ interface Modal {
 }
 
 // ⚠️ Change this password to something only you know
-const ADMIN_PASSWORD = 'govmind2026'
+const ADMIN_EMAIL = 'namanreddy24@gmail.com'
+const ADMIN_PASSWORD = 'GovMind@Naman2026'
 
 export default function AdminPage() {
   const [adminAuth, setAdminAuth] = useState(false)
