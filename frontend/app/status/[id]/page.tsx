@@ -83,7 +83,7 @@ export default function StatusPage() {
       safeId !== 'undefined' &&
       safeId.length > 10
     ) {
-      load(safeId)
+      load()
     }
   }, [safeId])
 
@@ -143,7 +143,7 @@ export default function StatusPage() {
       </h2>
       <p className="text-gray-400 mb-4">{error}</p>
       <button
-        onClick={() => load(safeId)}
+        onClick={() => load()}
         className="mb-4 text-sm text-[#1B4F72] underline block mx-auto"
       >
         Try again
