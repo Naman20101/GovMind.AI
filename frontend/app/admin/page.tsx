@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import {
   FileText, Clock, CheckCircle, AlertTriangle,
-  Loader2, X, Check, ChevronDown, RefreshCw, Lock
+  Loader2, X, Check, ChevronDown, RefreshCw, Lock, Mail
 } from 'lucide-react'
 import AuditTraceViewer from '@/components/AuditTraceViewer'
 import { type PermitListItem, type PermitResponse } from '@/lib/api'
@@ -29,21 +29,22 @@ interface Modal {
   fullData?: PermitResponse
 }
 
-// ⚠️ Change this password to something only you know
 const ADMIN_EMAIL = 'namanreddy24@gmail.com'
 const ADMIN_PASSWORD = 'GovMind@Naman2026'
 
 export default function AdminPage() {
   const [adminAuth, setAdminAuth] = useState(false)
+  const [adminEmail, setAdminEmail] = useState('')
   const [adminPass, setAdminPass] = useState('')
   const [adminError, setAdminError] = useState('')
+  const [showPass, setShowPass] = useState(false)
 
   const [permits, setPermits] = useState<PermitListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
   const [modal, setModal] = useState<Modal | null>(null)
   const [reason, setReason] = useState('')
-  const [reviewer, setReviewer] = useState('')
+  const [reviewer, setReviewer] = useState('Naman Reddy')
   const [submitting, setSubmitting] = useState(false)
   const [modalError, setModalError] = useState('')
 
@@ -53,13 +54,23 @@ export default function AdminPage() {
   }, [])
 
   const handleAdminLogin = () => {
-    if (adminPass === ADMIN_PASSWORD) {
+    if (
+      adminEmail.trim().toLowerCase() === ADMIN_EMAIL &&
+      adminPass === ADMIN_PASSWORD
+    ) {
       sessionStorage.setItem('govmind_admin', 'true')
       setAdminAuth(true)
       setAdminError('')
     } else {
-      setAdminError('Incorrect password. Access denied.')
+      setAdminError('Access denied. Invalid credentials.')
     }
+  }
+
+  const handleLock = () => {
+    sessionStorage.removeItem('govmind_admin')
+    setAdminAuth(false)
+    setAdminEmail('')
+    setAdminPass('')
   }
 
   const load = async () => {
@@ -130,35 +141,75 @@ export default function AdminPage() {
     }
   }
 
-  // ✅ Admin password gate
+  // ✅ Admin login gate
   if (!adminAuth) {
     return (
       <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center px-6">
         <div className="bg-white rounded-2xl shadow-card p-8 w-full max-w-sm">
-          <div className="w-12 h-12 bg-[#1B4F72]/10 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <Lock className="w-6 h-6 text-[#1B4F72]" />
+
+          <div className="w-14 h-14 bg-[#1B4F72]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-7 h-7 text-[#1B4F72]" />
           </div>
+
           <h1 className="font-serif text-2xl text-[#1B4F72] text-center mb-1">
             Admin Portal
           </h1>
           <p className="text-gray-500 text-sm text-center mb-6">
             GovMind.AI — Creator access only
           </p>
-          <input
-            type="password"
-            className="input mb-3"
-            placeholder="Enter admin password"
-            value={adminPass}
-            onChange={e => setAdminPass(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAdminLogin()}
-          />
+
+          <div className="space-y-3">
+            <div>
+              <label className="label">
+                <Mail className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />
+                Admin Email
+              </label>
+              <input
+                type="email"
+                className="input"
+                placeholder="Enter admin email"
+                value={adminEmail}
+                onChange={e => setAdminEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAdminLogin()}
+              />
+            </div>
+
+            <div>
+              <label className="label">
+                <Lock className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  className="input pr-10"
+                  placeholder="Enter admin password"
+                  value={adminPass}
+                  onChange={e => setAdminPass(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAdminLogin()}
+                />
+                <button
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <span className="text-xs">{showPass ? 'Hide' : 'Show'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           {adminError && (
-            <p className="text-red-500 text-xs mb-3 text-center">{adminError}</p>
+            <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-xl mt-4">
+              <X className="w-4 h-4 flex-shrink-0" />
+              {adminError}
+            </div>
           )}
-          <button onClick={handleAdminLogin}
-            className="w-full bg-[#1B4F72] text-white py-3 rounded-xl font-medium hover:bg-[#154360] active:scale-95 transition-all">
+
+          <button
+            onClick={handleAdminLogin}
+            className="w-full bg-[#1B4F72] text-white py-3 rounded-xl font-medium hover:bg-[#154360] active:scale-95 transition-all mt-4">
             Access Dashboard
           </button>
+
           <p className="text-center text-xs text-gray-400 mt-4">
             🔒 Restricted to authorized personnel only
           </p>
@@ -184,7 +235,7 @@ export default function AdminPage() {
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
 
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex items-start justify-between">
         <div>
           <span className="text-xs font-semibold text-[#F39C12] tracking-widest uppercase mb-2 block">
             Admin Portal
@@ -193,12 +244,9 @@ export default function AdminPage() {
           <p className="text-gray-500 mt-1">Review and manage permit applications.</p>
         </div>
         <button
-          onClick={() => {
-            sessionStorage.removeItem('govmind_admin')
-            setAdminAuth(false)
-          }}
-          className="flex items-center gap-2 text-sm text-gray-400 hover:text-red-500 transition-colors px-3 py-2 rounded-lg hover:bg-red-50">
-          <Lock className="w-4 h-4" />Lock
+          onClick={handleLock}
+          className="flex items-center gap-2 text-sm text-gray-400 hover:text-red-500 transition-colors px-3 py-2 rounded-lg hover:bg-red-50 border border-gray-200">
+          <Lock className="w-4 h-4" />Lock Portal
         </button>
       </div>
 
@@ -218,7 +266,7 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {/* Filter */}
+      {/* Filter bar */}
       <div className="flex items-center gap-3 mb-5">
         <div className="relative">
           <select value={filter} onChange={e => setFilter(e.target.value)}
@@ -260,7 +308,9 @@ export default function AdminPage() {
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/50">
                   {['App ID','Business','Type','Status','AI Decision','Confidence','Submitted','Actions'].map(h => (
-                    <th key={h} className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                    <th key={h} className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      {h}
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -291,7 +341,9 @@ export default function AdminPage() {
                       }
                     </td>
                     <td className="px-5 py-4 text-xs text-gray-400">
-                      {new Date(p.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {new Date(p.submitted_at).toLocaleDateString('en-US', {
+                        month: 'short', day: 'numeric'
+                      })}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
@@ -320,7 +372,9 @@ export default function AdminPage() {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-up">
 
-            <div className={`p-6 border-b border-gray-100 ${modal.action === 'APPROVED' ? 'bg-green-50' : 'bg-red-50'}`}>
+            <div className={`p-6 border-b border-gray-100 ${
+              modal.action === 'APPROVED' ? 'bg-green-50' : 'bg-red-50'
+            }`}>
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-semibold text-[#1B4F72] text-lg">
@@ -347,21 +401,26 @@ export default function AdminPage() {
                 <label className="label">Reason for Decision</label>
                 <textarea rows={3} className="input resize-none"
                   placeholder="Provide a clear reason (min 10 characters)..."
-                  value={reason} onChange={e => setReason(e.target.value)} />
-                <p className={`text-xs mt-1 ${reason.length < 10 && reason.length > 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                  value={reason}
+                  onChange={e => setReason(e.target.value)} />
+                <p className={`text-xs mt-1 ${
+                  reason.length < 10 && reason.length > 0 ? 'text-red-400' : 'text-gray-400'
+                }`}>
                   {reason.length}/10 minimum
                 </p>
               </div>
 
               <div>
-                <label className="label">Your Name (Reviewer)</label>
-                <input className="input" placeholder="Enter your full name"
-                  value={reviewer} onChange={e => setReviewer(e.target.value)} />
+                <label className="label">Reviewer Name</label>
+                <input className="input"
+                  placeholder="Enter your full name"
+                  value={reviewer}
+                  onChange={e => setReviewer(e.target.value)} />
               </div>
 
               {modalError && (
-                <div className="flex items-center gap-2 text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">
-                  {modalError}
+                <div className="flex items-center gap-2 text-sm text-red-500 bg-red-50 border border-red-100 px-4 py-3 rounded-xl">
+                  <X className="w-4 h-4 flex-shrink-0" />{modalError}
                 </div>
               )}
 
