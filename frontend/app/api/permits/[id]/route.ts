@@ -4,25 +4,15 @@ export const maxDuration = 60
 
 const BACKEND = 'https://govmind-ai.onrender.com'
 
-async function fetchWithRetry(
-  url: string,
-  options?: RequestInit,
-  retries = 8
-): Promise<Response> {
-  for (let i = 0; i < retries; i++) {
+async function wakeBackend() {
+  for (let i = 0; i < 5; i++) {
     try {
-      const res = await fetch(url, {
-        ...options,
-        cache: 'no-store',
-      })
-      if (res.ok) return res
-      if (res.status === 404) throw new Error('Not found')
-    } catch (e) {
-      if (e instanceof Error && e.message === 'Not found') throw e
-    }
+      const res = await fetch(`${BACKEND}/health`, { cache: 'no-store' })
+      if (res.ok) return true
+    } catch (_e) { /* keep trying */ }
     await new Promise(r => setTimeout(r, 3000))
   }
-  throw new Error('Server unavailable after retries')
+  return false
 }
 
 export async function GET(
@@ -30,16 +20,15 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const res = await fetchWithRetry(
-      `${BACKEND}/api/v1/permits/${params.id}`
+    await wakeBackend()
+    const res = await fetch(
+      `${BACKEND}/api/v1/permits/${params.id}`,
+      { cache: 'no-store' }
     )
     const data = await res.json()
-    return NextResponse.json(data, { status: 200 })
+    return NextResponse.json(data, { status: res.status })
   } catch (_e) {
-    return NextResponse.json(
-      { error: 'Application not found' },
-      { status: 404 }
-    )
+    return NextResponse.json({ error: 'Application not found' }, { status: 404 })
   }
 }
 
@@ -49,17 +38,8 @@ export async function POST(
 ) {
   try {
     const body = await request.json()
+    await wakeBackend()
 
-    // Wake server first
-    for (let i = 0; i < 5; i++) {
-      try {
-        const health = await fetch(`${BACKEND}/health`, { cache: 'no-store' })
-        if (health.ok) break
-      } catch (_e) { /* keep trying */ }
-      await new Promise(r => setTimeout(r, 3000))
-    }
-
-    // Submit review
     const res = await fetch(
       `${BACKEND}/api/v1/permits/${params.id}/review`,
       {
@@ -70,17 +50,16 @@ export async function POST(
       }
     )
 
+    const data = await res.json()
+
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
       return NextResponse.json(
-        { error: err.detail || 'Review failed' },
+        { error: data.detail || data.error || 'Review failed' },
         { status: res.status }
       )
     }
 
-    const data = await res.json()
     return NextResponse.json(data, { status: 200 })
-
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Review failed' },
