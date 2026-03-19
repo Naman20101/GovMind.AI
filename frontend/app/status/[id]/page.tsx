@@ -50,36 +50,30 @@ export default function StatusPage() {
   const id = params?.id
   const safeId = Array.isArray(id) ? id[0] : id
 
-  const load = async (permitId: string) => {
+  const load = async () => {
+    if (!safeId || safeId === 'undefined' || safeId.length < 10) {
+      setError('Invalid application ID.')
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError('')
-
-    // Wake Render
     try {
-      await fetch(`${API}/health`)
-    } catch (_e) { /* ignore */ }
-
-    // Retry 8 times with 3 second gaps
-    for (let attempt = 0; attempt < 8; attempt++) {
-      try {
-        setAttempts(attempt + 1)
-        const res = await fetch(`${API}/api/v1/permits/${permitId}`)
-        if (res.ok) {
-          const data = await res.json()
-          setPermit(data)
-          setLoading(false)
-          return
-        }
-      } catch (_e) {
-        // continue retrying
+      // ✅ Use Vercel proxy — not Render directly
+      const res = await fetch(`/api/permits/${safeId}`, {
+        cache: 'no-store'
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setPermit(data)
+      } else {
+        setError('Application not found.')
       }
-      if (attempt < 7) {
-        await new Promise(r => setTimeout(r, 3000))
-      }
+    } catch (_e) {
+      setError('Application not found or server is unavailable.')
+    } finally {
+      setLoading(false)
     }
-
-    setError('Application not found or server is unavailable.')
-    setLoading(false)
   }
 
   // ✅ CORE FIX: Only run when safeId is a real UUID, not undefined
@@ -97,15 +91,21 @@ export default function StatusPage() {
     if (!safeId) return
     setReviewLoading(true)
     try {
-      const updated = await reviewPermit(safeId, {
-        decision: 'HUMAN_REVIEW',
-        reason: 'Requested by applicant for manual review',
-        reviewed_by: 'applicant',
+      // ✅ Use Vercel proxy
+      const res = await fetch(`/api/permits/${safeId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decision: 'HUMAN_REVIEW',
+          reason: 'Requested by applicant for manual review',
+          reviewed_by: 'applicant',
+        }),
       })
-      setPermit(updated)
+      const data = await res.json()
+      setPermit(data)
       setReviewed(true)
     } catch (_e) {
-      setError('Could not request review. Please try again.')
+      setError('Could not request review.')
     } finally {
       setReviewLoading(false)
     }
