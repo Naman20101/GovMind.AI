@@ -44,11 +44,68 @@ def validate_file(file: UploadFile):
         )
 
 
-# ✅ /all MUST come before /{application_id}
+def send_email_notification(
+    to_email: str,
+    business_name: str,
+    decision: str,
+    reason: str,
+    permit_id: str
+):
+    """Send email notification - uses Resend if API key available"""
+    try:
+        resend_key = os.getenv("RESEND_API_KEY")
+        if not resend_key:
+            print(f"No RESEND_API_KEY — skipping email to {to_email}")
+            return
+
+        import resend
+        resend.api_key = resend_key
+
+        status_emoji = "✅" if decision == "APPROVED" else "❌"
+        status_text = "Approved" if decision == "APPROVED" else "Rejected/Flagged"
+        color = "#27AE60" if decision == "APPROVED" else "#E74C3C"
+
+        resend.Emails.send({
+            "from": "GovMind.AI <decisions@govmind.ai>",
+            "to": to_email,
+            "subject": f"{status_emoji} Your Permit Application: {status_text}",
+            "html": f"""
+            <div style="font-family: 'DM Sans', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: #1B4F72; padding: 30px; border-radius: 16px 16px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">GovMind.AI</h1>
+                <p style="color: rgba(255,255,255,0.7); margin: 8px 0 0;">Government Services, Automated with AI</p>
+              </div>
+              <div style="background: white; padding: 30px; border-radius: 0 0 16px 16px; border: 1px solid #e5e7eb;">
+                <div style="text-align: center; margin-bottom: 24px;">
+                  <span style="font-size: 48px;">{status_emoji}</span>
+                  <h2 style="color: {color}; margin: 8px 0;">{status_text}</h2>
+                </div>
+                <p style="color: #374151;">Your permit application for <strong>{business_name}</strong> has been reviewed.</p>
+                <div style="background: #F4F6F9; padding: 16px; border-radius: 12px; margin: 16px 0;">
+                  <p style="color: #6B7280; font-size: 14px; margin: 0 0 8px;"><strong>Decision Reason:</strong></p>
+                  <p style="color: #374151; margin: 0;">{reason}</p>
+                </div>
+                <div style="background: #F4F6F9; padding: 16px; border-radius: 12px; margin: 16px 0;">
+                  <p style="color: #6B7280; font-size: 12px; margin: 0;">Application ID: APP-{permit_id[:8].upper()}</p>
+                </div>
+                <p style="color: #6B7280; font-size: 12px; margin-top: 24px; text-align: center;">
+                  🔒 All decisions are auditable and human-reversible.<br/>
+                  If you disagree with this decision, you can request human review.
+                </p>
+              </div>
+            </div>
+            """
+        })
+        print(f"✅ Email sent to {to_email}")
+    except Exception as e:
+        print(f"❌ Email failed: {repr(e)}")
+
+
+# ✅ /all MUST be before /{application_id}
 @router.get("/all", response_model=list[PermitListItem])
 def list_permits(
     status: str = None,
-    limit: int = 50,
+    limit: int = 500,  # ✅ Increased from 50
     offset: int = 0,
     db: Session = Depends(get_db)
 ):
@@ -63,6 +120,7 @@ def list_permits(
         .all()
     )
 
+
 @router.post("/submit", response_model=PermitResponse)
 async def submit_permit(
     business_name: str = Form(...),
@@ -70,6 +128,7 @@ async def submit_permit(
     tax_id: str = Form(...),
     address: str = Form(...),
     permit_type: str = Form(...),
+    applicant_email: str = Form(default=""),
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
@@ -92,7 +151,7 @@ async def submit_permit(
         "address": address
     })
 
-    # ✅ SAVE TO DB FIRST before any AI processing
+    # ✅ Save to DB FIRST before AI review
     permit = PermitApplication(
         business_name=business_name,
         owner_name_masked=masked["owner_name"],
@@ -111,10 +170,10 @@ async def submit_permit(
         }
     )
     db.add(permit)
-    db.commit()  # ✅ COMMIT IMMEDIATELY — record exists now
+    db.commit()
     db.refresh(permit)
 
-    # ✅ AI review happens AFTER commit — if it fails, record still exists
+    # ✅ AI review after commit — won't lose record if it fails
     try:
         review = auto_review_business_permit(file_path)
         permit.ai_decision = review["decision"]
@@ -127,21 +186,56 @@ async def submit_permit(
         db.refresh(permit)
     except Exception as e:
         print(f"Review error (non-fatal): {str(e)}")
-        # Record already saved — just update with fallback
         permit.status = "PENDING"
         permit.ai_decision = "PENDING"
-        permit.ai_reason = "Manual review required."
+        permit.ai_reason = "Application received. Manual review in progress."
         permit.ai_confidence = 85.0
-        permit.audit_trace = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "decision": "PENDING",
-            "reason": "Application received. Manual review in progress.",
-            "confidence": 85.0,
-            "reversible_by": "admin",
-            "trace_id": str(uuid.uuid4())
-        }
-        flag_modified(permit, "audit_trace")
         db.commit()
         db.refresh(permit)
+
+    return permit
+
+
+@router.get("/{application_id}", response_model=PermitResponse)
+def get_permit(application_id: str, db: Session = Depends(get_db)):
+    permit = db.get(PermitApplication, application_id)
+    if not permit:
+        raise HTTPException(status_code=404, detail="Application not found.")
+    return permit
+
+
+@router.post("/{application_id}/review", response_model=PermitResponse)
+def review_permit(
+    application_id: str,
+    body: HumanReviewRequest,
+    db: Session = Depends(get_db)
+):
+    permit = db.get(PermitApplication, application_id)
+    if not permit:
+        raise HTTPException(status_code=404, detail="Application not found.")
+
+    permit.status = body.decision
+    permit.reviewed_by = body.reviewed_by
+    permit.reviewed_at = datetime.utcnow()
+    permit.human_override_reason = body.reason
+
+    trace = permit.audit_trace or []
+    if isinstance(trace, dict):
+        trace = [trace]
+
+    trace.append({
+        "type": "human_override",
+        "decision": body.decision,
+        "reason": body.reason,
+        "reviewed_by": body.reviewed_by,
+        "timestamp": datetime.utcnow().isoformat(),
+        "reversible_by": "admin"
+    })
+
+    permit.audit_trace = trace
+    flag_modified(permit, "audit_trace")
+
+    db.commit()
+    db.refresh(permit)
 
     return permit
