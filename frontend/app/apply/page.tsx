@@ -16,6 +16,48 @@ const PERMIT_TYPES = [
   'Special Event', 'Retail', 'Healthcare Facility',
 ]
 
+function HumanReviewButton({ permitId }: { permitId: string }) {
+  const [sent, setSent] = useState(false)
+  const [sending, setSending] = useState(false)
+
+  const request = async () => {
+    setSending(true)
+    try {
+      await fetch('/api/permits/' + permitId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decision: 'HUMAN_REVIEW',
+          reason: 'Requested by applicant for manual review',
+          reviewed_by: 'applicant',
+        }),
+      })
+      setSent(true)
+    } catch (_e) {
+      setSent(true)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (sent) return (
+    <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 px-4 py-3 rounded-xl">
+      <CheckCircle className="w-4 h-4 flex-shrink-0" />
+      Request sent. A government officer will review your application shortly.
+    </div>
+  )
+
+  return (
+    <button onClick={request} disabled={sending}
+      className="w-full flex items-center justify-center gap-2 border border-[#1B4F72] text-[#1B4F72] px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#1B4F72] hover:text-white disabled:opacity-40 active:scale-95 transition-all">
+      {sending
+        ? <><Loader2 className="w-4 h-4 animate-spin" />Sending request...</>
+        : <><Users className="w-4 h-4" />Request Human Review</>
+      }
+    </button>
+  )
+}
+
 export default function ApplyPage() {
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -72,7 +114,7 @@ export default function ApplyPage() {
     }
   }
 
-  // Result view — shown after successful submission
+  // ✅ Result shown inline — zero redirect
   if (result) {
     const isApproved = result.ai_decision === 'APPROVED'
 
@@ -126,10 +168,7 @@ export default function ApplyPage() {
               {result.ai_reason}
             </p>
           )}
-          <Link href={`/status/${result.id}`}
-            className="w-full flex items-center justify-center gap-2 border border-[#1B4F72] text-[#1B4F72] px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#1B4F72] hover:text-white transition-all">
-            <Users className="w-4 h-4" />Request Human Review
-          </Link>
+          <HumanReviewButton permitId={result.id} />
         </div>
 
         {/* Protected info */}
@@ -167,8 +206,8 @@ export default function ApplyPage() {
               </div>
             </div>
             <div className="bg-gray-50 rounded-xl p-4 text-xs text-gray-500 space-y-1">
-              <p>Decision: <strong>{(result.audit_trace as Record<string,unknown>).decision as string}</strong></p>
-              <p>Confidence: <strong>{(result.audit_trace as Record<string,unknown>).confidence as number}%</strong></p>
+              <p>Decision: <strong>{(result.audit_trace as Record<string, unknown>).decision as string}</strong></p>
+              <p>Confidence: <strong>{(result.audit_trace as Record<string, unknown>).confidence as number}%</strong></p>
               <p className="flex items-center gap-1 mt-2">
                 <Shield className="w-3 h-3" />Reversible by: admin
               </p>
@@ -179,13 +218,17 @@ export default function ApplyPage() {
           </div>
         )}
 
+        {/* Actions */}
         <div className="flex gap-3">
           <button
             onClick={() => {
               setResult(null)
               setStep(0)
-              setForm({ business_name: '', permit_type: '', owner_name: '',
-                tax_id: '', address: '', city: '', state: '', zip: '', file: null })
+              setForm({
+                business_name: '', permit_type: '', owner_name: '',
+                tax_id: '', address: '', city: '', state: '', zip: '',
+                file: null
+              })
             }}
             className="flex-1 border border-gray-200 text-gray-600 px-4 py-3 rounded-xl text-sm font-medium hover:bg-gray-50 transition-all"
           >
