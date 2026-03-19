@@ -1,4 +1,3 @@
-const BASE_URL = ''  // Empty — use Vercel routes now
 export interface PermitResponse {
   id: string
   business_name: string
@@ -41,36 +40,17 @@ export class ApiError extends Error {
   }
 }
 
-async function fetchWithTimeout(
-  url: string,
-  options: RequestInit = {},
-  timeoutMs = 120000
-): Promise<Response> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal })
-    return response
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new ApiError('Server is waking up — please try again in 30 seconds.', 408)
-    }
-    throw new ApiError('Cannot connect to server. Please try again.', 0)
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new ApiError(body.error || `Request failed with status ${res.status}`, res.status)
+    throw new ApiError(body.error || `Request failed ${res.status}`, res.status)
   }
   return res.json()
 }
 
+// All calls go through Vercel proxy — no direct Render calls
 export async function submitPermit(formData: FormData): Promise<PermitResponse> {
-  const res = await fetch('/api/submit', {  // Vercel route
+  const res = await fetch('/api/submit', {
     method: 'POST',
     body: formData,
   })
@@ -78,7 +58,7 @@ export async function submitPermit(formData: FormData): Promise<PermitResponse> 
 }
 
 export async function getPermit(id: string): Promise<PermitResponse> {
-  const res = await fetch(`/api/permits/${id}`)  // Vercel route
+  const res = await fetch(`/api/permits/${id}`, { cache: 'no-store' })
   return handle<PermitResponse>(res)
 }
 
@@ -91,9 +71,7 @@ export async function getAllPermits(
   if (status) params.append('status', status)
   params.append('limit', String(limit))
   params.append('offset', String(offset))
-  const res = await fetch(
-    `https://govmind-ai.onrender.com/api/v1/permits/all?${params}`
-  )
+  const res = await fetch(`/api/permits/all?${params}`, { cache: 'no-store' })
   return handle<PermitListItem[]>(res)
 }
 
