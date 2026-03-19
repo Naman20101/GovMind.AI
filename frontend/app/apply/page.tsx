@@ -1,40 +1,27 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   Building2, User, Hash, MapPin, FileUp,
   ChevronRight, ChevronLeft, Check, Lock,
-  AlertCircle, Loader2
+  AlertCircle, Loader2, CheckCircle,
+  AlertTriangle, Shield, Users
 } from 'lucide-react'
+import { submitPermit, type PermitResponse } from '@/lib/api'
 
-const API = 'https://govmind-ai.onrender.com'
 const STEPS = ['Business Info', 'Location', 'Documents']
 const PERMIT_TYPES = [
   'Business License', 'Food Service', 'Construction',
   'Special Event', 'Retail', 'Healthcare Facility',
 ]
 
-async function wakeServer(): Promise<boolean> {
-  for (let i = 0; i < 18; i++) {
-    try {
-      const res = await fetch(`${API}/ping`, {
-        method: 'GET',
-        cache: 'no-store',
-      })
-      if (res.ok) return true
-    } catch (_e) { /* keep trying */ }
-    await new Promise(r => setTimeout(r, 5000))
-  }
-  return false
-}
-
 export default function ApplyPage() {
-  const router = useRouter()
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState('')
   const [error, setError] = useState('')
+  const [result, setResult] = useState<PermitResponse | null>(null)
   const [taxMasked, setTaxMasked] = useState(false)
   const [form, setForm] = useState({
     business_name: '', permit_type: '', owner_name: '',
@@ -42,8 +29,7 @@ export default function ApplyPage() {
     file: null as File | null,
   })
 
-  const update = (field: string, value: string) =>
-    setForm((p) => ({ ...p, [field]: value }))
+  const update = (f: string, v: string) => setForm(p => ({ ...p, [f]: v }))
 
   const displayTax = () => {
     if (!form.tax_id) return ''
@@ -62,16 +48,8 @@ export default function ApplyPage() {
     if (!form.file) { setError('Please upload a document.'); return }
     setLoading(true)
     setError('')
-
-    setLoadingMsg('🔌 Connecting to server...')
-    const awake = await wakeServer()
-    if (!awake) {
-      setError('Server unavailable. Please try again in 1 minute.')
-      setLoading(false)
-      return
-    }
-
     setLoadingMsg('📋 Submitting your application...')
+
     try {
       const fd = new FormData()
       fd.append('business_name', form.business_name)
@@ -81,28 +59,145 @@ export default function ApplyPage() {
       fd.append('permit_type', form.permit_type)
       fd.append('file', form.file)
 
-      const res = await fetch(`${API}/api/v1/permits/submit`, {
-        method: 'POST',
-        body: fd,
-      })
+      setLoadingMsg('🤖 AI is reviewing your application...')
+      const data = await submitPermit(fd)
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || `Server error ${res.status}`)
-      }
-
-      const result = await res.json()
-      if (!result?.id) throw new Error('No application ID returned.')
-
-      setLoadingMsg('🤖 AI reviewing your application...')
-      await new Promise(r => setTimeout(r, 1500))
-
-      router.push(`/status/${result.id}`)
+      if (!data?.id) throw new Error('No application ID returned.')
+      setResult(data)
 
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Submission failed. Please try again.')
+    } finally {
       setLoading(false)
     }
+  }
+
+  // Result view — shown after successful submission
+  if (result) {
+    const isApproved = result.ai_decision === 'APPROVED'
+
+    return (
+      <div className="max-w-2xl mx-auto px-6 py-12 space-y-6">
+
+        {/* Status card */}
+        <div className="card text-center">
+          <div className={`w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${
+            isApproved ? 'bg-green-50' : 'bg-amber-50'
+          }`}>
+            {isApproved
+              ? <CheckCircle className="w-8 h-8 text-[#27AE60]" />
+              : <AlertTriangle className="w-8 h-8 text-[#F39C12]" />
+            }
+          </div>
+          <span className="text-xs text-gray-400 font-mono block mb-2">
+            APP-{result.id.slice(0, 8).toUpperCase()}
+          </span>
+          <h1 className="font-serif text-2xl text-[#1B4F72] mb-1">{result.business_name}</h1>
+          <p className="text-sm text-gray-500 mb-4">{result.permit_type}</p>
+          <span className={`badge text-sm px-4 py-2 ${
+            isApproved ? 'badge-approved' : 'badge-flagged'
+          }`}>
+            {result.ai_decision || result.status}
+          </span>
+        </div>
+
+        {/* AI Decision */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-[#1B4F72]">🤖 AI Decision</h2>
+            <span className={`badge ${isApproved ? 'badge-approved' : 'badge-flagged'}`}>
+              {result.ai_decision}
+            </span>
+          </div>
+          {result.ai_confidence != null && (
+            <div className="mb-4">
+              <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                <span>Confidence Score</span>
+                <span className="font-semibold text-[#1B4F72]">{result.ai_confidence}%</span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-[#1B4F72] rounded-full"
+                  style={{ width: `${result.ai_confidence}%` }} />
+              </div>
+            </div>
+          )}
+          {result.ai_reason && (
+            <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-xl p-4 mb-4">
+              {result.ai_reason}
+            </p>
+          )}
+          <Link href={`/status/${result.id}`}
+            className="w-full flex items-center justify-center gap-2 border border-[#1B4F72] text-[#1B4F72] px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#1B4F72] hover:text-white transition-all">
+            <Users className="w-4 h-4" />Request Human Review
+          </Link>
+        </div>
+
+        {/* Protected info */}
+        <div className="card">
+          <div className="flex items-center gap-2 mb-4">
+            <Lock className="w-4 h-4 text-[#1B4F72]" />
+            <h2 className="font-semibold text-[#1B4F72]">Your Protected Information</h2>
+          </div>
+          <div className="space-y-3">
+            {[
+              { label: 'Owner', value: result.owner_name_masked },
+              { label: 'Tax ID', value: result.tax_id_masked },
+              { label: 'Address', value: result.address_masked },
+            ].map(({ label, value }) => value && (
+              <div key={label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                <span className="text-sm text-gray-500">{label}</span>
+                <span className="flex items-center gap-1.5 text-sm font-medium text-[#1B4F72] font-mono">
+                  <Lock className="w-3 h-3 text-gray-300" />{value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Audit */}
+        {result.audit_trace && (
+          <div className="card">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 bg-[#1B4F72]/10 rounded-lg flex items-center justify-center">
+                <Shield className="w-4 h-4 text-[#1B4F72]" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#1B4F72]">Audit Trail</p>
+                <p className="text-xs text-gray-400">1 decision recorded</p>
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-4 text-xs text-gray-500 space-y-1">
+              <p>Decision: <strong>{(result.audit_trace as Record<string,unknown>).decision as string}</strong></p>
+              <p>Confidence: <strong>{(result.audit_trace as Record<string,unknown>).confidence as number}%</strong></p>
+              <p className="flex items-center gap-1 mt-2">
+                <Shield className="w-3 h-3" />Reversible by: admin
+              </p>
+            </div>
+            <p className="text-xs text-gray-400 text-center mt-3">
+              🔒 All decisions are immutable and human-reversible
+            </p>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              setResult(null)
+              setStep(0)
+              setForm({ business_name: '', permit_type: '', owner_name: '',
+                tax_id: '', address: '', city: '', state: '', zip: '', file: null })
+            }}
+            className="flex-1 border border-gray-200 text-gray-600 px-4 py-3 rounded-xl text-sm font-medium hover:bg-gray-50 transition-all"
+          >
+            Submit Another
+          </button>
+          <Link href="/"
+            className="flex-1 bg-[#1B4F72] text-white px-4 py-3 rounded-xl text-sm font-medium text-center hover:bg-[#154360] transition-all">
+            Back to Home
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -115,7 +210,7 @@ export default function ApplyPage() {
         <p className="text-gray-500 mt-2">Get an AI-powered decision in minutes.</p>
       </div>
 
-      {/* Step indicator */}
+      {/* Steps */}
       <div className="flex items-center gap-0 mb-10">
         {STEPS.map((label, i) => (
           <div key={label} className="flex items-center flex-1 last:flex-none">
@@ -132,15 +227,13 @@ export default function ApplyPage() {
               }`}>{label}</span>
             </div>
             {i < STEPS.length - 1 && (
-              <div className={`flex-1 h-px mx-3 mb-5 transition-all duration-300 ${
-                i < step ? 'bg-[#27AE60]' : 'bg-gray-200'
-              }`} />
+              <div className={`flex-1 h-px mx-3 mb-5 ${i < step ? 'bg-[#27AE60]' : 'bg-gray-200'}`} />
             )}
           </div>
         ))}
       </div>
 
-      {/* Loading overlay */}
+      {/* Loading */}
       {loading && (
         <div className="bg-white rounded-2xl shadow-card p-12 text-center">
           <Loader2 className="w-12 h-12 text-[#1B4F72] animate-spin mx-auto mb-4" />
@@ -152,145 +245,120 @@ export default function ApplyPage() {
         </div>
       )}
 
-      {/* Form */}
       {!loading && (
         <div className="bg-white rounded-2xl shadow-card p-8">
 
-          {/* STEP 0 */}
           {step === 0 && (
             <div className="space-y-5 animate-fade-up">
               <div>
                 <label className="label">
-                  <Building2 className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />
-                  Business Name
+                  <Building2 className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />Business Name
                 </label>
                 <input className="input" placeholder="e.g. Acme Corporation"
-                  value={form.business_name}
-                  onChange={(e) => update('business_name', e.target.value)} />
+                  value={form.business_name} onChange={e => update('business_name', e.target.value)} />
               </div>
               <div>
                 <label className="label">Permit Type</label>
                 <select className="input" value={form.permit_type}
-                  onChange={(e) => update('permit_type', e.target.value)}>
+                  onChange={e => update('permit_type', e.target.value)}>
                   <option value="">Select permit type...</option>
-                  {PERMIT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {PERMIT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div>
                 <label className="label">
-                  <User className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />
-                  Owner Name
+                  <User className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />Owner Name
                 </label>
                 <input className="input" placeholder="Full legal name"
-                  value={form.owner_name}
-                  onChange={(e) => update('owner_name', e.target.value)} />
+                  value={form.owner_name} onChange={e => update('owner_name', e.target.value)} />
               </div>
               <div>
                 <label className="label">
-                  <Hash className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />
-                  Tax ID / EIN
+                  <Hash className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />Tax ID / EIN
                 </label>
                 <input className="input font-mono" placeholder="XX-XXXXXXX"
                   value={displayTax()}
-                  onChange={(e) => { if (!taxMasked) update('tax_id', e.target.value) }}
+                  onChange={e => { if (!taxMasked) update('tax_id', e.target.value) }}
                   onFocus={() => setTaxMasked(false)}
                   onBlur={() => setTaxMasked(true)} />
                 <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
-                  <Lock className="w-3 h-3" />Masked after entry for your security
+                  <Lock className="w-3 h-3" />Masked after entry
                 </p>
               </div>
             </div>
           )}
 
-          {/* STEP 1 */}
           {step === 1 && (
             <div className="space-y-5 animate-fade-up">
               <div className="flex items-start gap-3 bg-[#1B4F72]/5 border border-[#1B4F72]/10 rounded-xl p-4">
                 <Lock className="w-4 h-4 text-[#1B4F72] mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-[#1B4F72]/80 leading-relaxed">
-                  This information is <strong>encrypted at rest</strong> and never shared with third parties.
+                <p className="text-sm text-[#1B4F72]/80">
+                  This information is <strong>encrypted at rest</strong> and never shared.
                 </p>
               </div>
               <div>
                 <label className="label">
-                  <MapPin className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />
-                  Street Address
+                  <MapPin className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />Street Address
                 </label>
                 <input className="input" placeholder="123 Main Street"
-                  value={form.address}
-                  onChange={(e) => update('address', e.target.value)} />
+                  value={form.address} onChange={e => update('address', e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label">City</label>
                   <input className="input" placeholder="Austin"
-                    value={form.city}
-                    onChange={(e) => update('city', e.target.value)} />
+                    value={form.city} onChange={e => update('city', e.target.value)} />
                 </div>
                 <div>
                   <label className="label">State</label>
                   <input className="input" placeholder="TX" maxLength={2}
-                    value={form.state}
-                    onChange={(e) => update('state', e.target.value.toUpperCase())} />
+                    value={form.state} onChange={e => update('state', e.target.value.toUpperCase())} />
                 </div>
               </div>
               <div>
                 <label className="label">ZIP Code</label>
                 <input className="input" placeholder="78701" maxLength={5}
-                  value={form.zip}
-                  onChange={(e) => update('zip', e.target.value)} />
+                  value={form.zip} onChange={e => update('zip', e.target.value)} />
               </div>
             </div>
           )}
 
-          {/* STEP 2 */}
           {step === 2 && (
             <div className="space-y-6 animate-fade-up">
               <div>
                 <label className="label">
-                  <FileUp className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />
-                  Upload Documents
+                  <FileUp className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />Upload Documents
                 </label>
-                <label className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-200 ${
+                <label className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${
                   form.file ? 'border-[#27AE60] bg-green-50' :
-                  'border-gray-200 bg-gray-50 hover:border-[#1B4F72] hover:bg-[#1B4F72]/5'
+                  'border-gray-200 bg-gray-50 hover:border-[#1B4F72]'
                 }`}>
                   <div className="text-center">
                     {form.file ? (
                       <>
                         <Check className="w-8 h-8 text-[#27AE60] mx-auto mb-2" />
                         <p className="text-sm font-medium text-[#27AE60]">{form.file.name}</p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {(form.file.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
+                        <p className="text-xs text-gray-400">{(form.file.size/1024/1024).toFixed(2)} MB</p>
                       </>
                     ) : (
                       <>
                         <FileUp className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                        <p className="text-sm font-medium text-gray-600">
-                          Drop your file here or click to browse
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">PDF, PNG, JPG — max 10MB</p>
+                        <p className="text-sm font-medium text-gray-600">Tap to browse</p>
+                        <p className="text-xs text-gray-400">PDF, PNG, JPG — max 10MB</p>
                       </>
                     )}
                   </div>
                   <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg"
-                    onChange={(e) => {
+                    onChange={e => {
                       const f = e.target.files?.[0]
-                      if (f && f.size <= 10 * 1024 * 1024) {
-                        setForm((p) => ({ ...p, file: f }))
-                        setError('')
-                      } else if (f) {
-                        setError('File must be under 10MB')
-                      }
+                      if (f && f.size <= 10*1024*1024) { setForm(p => ({...p, file: f})); setError('') }
+                      else if (f) setError('File must be under 10MB')
                     }} />
                 </label>
               </div>
 
               <div className="bg-[#F4F6F9] rounded-xl p-4 space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  Application Summary
-                </p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Summary</p>
                 {[
                   ['Business', form.business_name],
                   ['Permit', form.permit_type],
@@ -303,39 +371,32 @@ export default function ApplyPage() {
                   </div>
                 ))}
               </div>
-
-              <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl p-3">
-                <Loader2 className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-blue-600">
-                  After clicking submit, we&apos;ll connect to the server automatically.
-                  Please wait up to 60 seconds.
-                </p>
-              </div>
             </div>
           )}
 
           {error && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-xl mt-5">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              {error}
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
             </div>
           )}
 
           <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-100">
-            <button onClick={() => setStep((s) => s - 1)} disabled={step === 0}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+            <button onClick={() => setStep(s => s-1)} disabled={step === 0}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 transition-all">
               <ChevronLeft className="w-4 h-4" />Back
             </button>
-
             {step < 2 ? (
-              <button onClick={() => setStep((s) => s + 1)} disabled={!canProceed()}
-                className="flex items-center gap-2 bg-[#1B4F72] text-white px-7 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#154360] disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all shadow-sm">
+              <button onClick={() => setStep(s => s+1)} disabled={!canProceed()}
+                className="flex items-center gap-2 bg-[#1B4F72] text-white px-7 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#154360] disabled:opacity-40 active:scale-95 transition-all shadow-sm">
                 Continue <ChevronRight className="w-4 h-4" />
               </button>
             ) : (
               <button onClick={handleSubmit} disabled={!canProceed() || loading}
-                className="flex items-center gap-2 bg-[#1B4F72] text-white px-8 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#154360] disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all shadow-sm">
-                Submit Application <ChevronRight className="w-4 h-4" />
+                className="flex items-center gap-2 bg-[#1B4F72] text-white px-8 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#154360] disabled:opacity-40 active:scale-95 transition-all shadow-sm">
+                {loading
+                  ? <><Loader2 className="w-4 h-4 animate-spin" />Processing...</>
+                  : <>Submit Application <ChevronRight className="w-4 h-4" /></>
+                }
               </button>
             )}
           </div>
