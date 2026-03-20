@@ -1,8 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Landmark, Lock, Mail, Eye, EyeOff, Loader2, AlertCircle, User } from 'lucide-react'
+
+interface StoredUser {
+  name: string
+  email: string
+  password: string
+  createdAt: string
+}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -11,20 +18,41 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-  })
+  const [form, setForm] = useState({ name: '', email: '', password: '' })
+
+  // ✅ Check if already logged in
+  useEffect(() => {
+    try {
+      const session = localStorage.getItem('govmind_session')
+      if (session) {
+        router.push('/apply')
+      }
+    } catch (_e) { /* ignore */ }
+  }, [router])
 
   const update = (f: string, v: string) => setForm(p => ({ ...p, [f]: v }))
 
+  const getUsers = (): StoredUser[] => {
+    try {
+      return JSON.parse(localStorage.getItem('govmind_users') || '[]')
+    } catch (_e) {
+      return []
+    }
+  }
+
+  const saveUsers = (users: StoredUser[]) => {
+    localStorage.setItem('govmind_users', JSON.stringify(users))
+  }
+
   const handleSubmit = async () => {
-    if (!form.email || !form.password) {
+    setError('')
+    setSuccess('')
+
+    if (!form.email.trim() || !form.password.trim()) {
       setError('Please fill in all fields.')
       return
     }
-    if (isSignup && !form.name) {
+    if (isSignup && !form.name.trim()) {
       setError('Please enter your name.')
       return
     }
@@ -34,62 +62,68 @@ export default function LoginPage() {
     }
 
     setLoading(true)
-    setError('')
-    setSuccess('')
 
     try {
+      const normalizedEmail = form.email.trim().toLowerCase()
+
       if (isSignup) {
-        // Store in localStorage with hashed indicator
-        const users = JSON.parse(localStorage.getItem('govmind_users') || '[]')
-        const exists = users.find((u: { email: string }) =>
-          u.email.toLowerCase() === form.email.toLowerCase()
-        )
+        const users = getUsers()
+        const exists = users.find(u => u.email === normalizedEmail)
+
         if (exists) {
-          setError('An account with this email already exists. Please sign in.')
+          setError('Account already exists. Please sign in instead.')
           setLoading(false)
           return
         }
 
-        const newUser = {
-          name: form.name,
-          email: form.email.toLowerCase(),
+        const newUser: StoredUser = {
+          name: form.name.trim(),
+          email: normalizedEmail,
           password: form.password,
           createdAt: new Date().toISOString(),
         }
+
         users.push(newUser)
-        localStorage.setItem('govmind_users', JSON.stringify(users))
+        saveUsers(users)
+
+        // ✅ Save session
         localStorage.setItem('govmind_session', JSON.stringify({
-          name: form.name,
-          email: form.email.toLowerCase(),
+          name: newUser.name,
+          email: newUser.email,
         }))
 
         setSuccess('Account created! Redirecting...')
-        await new Promise(r => setTimeout(r, 800))
+        await new Promise(r => setTimeout(r, 700))
         router.push('/apply')
 
       } else {
-        const users = JSON.parse(localStorage.getItem('govmind_users') || '[]')
-        const user = users.find((u: { email: string; password: string }) =>
-          u.email.toLowerCase() === form.email.toLowerCase() &&
-          u.password === form.password
+        const users = getUsers()
+        const user = users.find(
+          u => u.email === normalizedEmail && u.password === form.password
         )
 
         if (!user) {
-          setError('Invalid email or password. Please try again.')
+          // ✅ Helpful error — distinguish wrong password vs no account
+          const emailExists = users.find(u => u.email === normalizedEmail)
+          if (emailExists) {
+            setError('Incorrect password. Please try again.')
+          } else {
+            setError('No account found. Please sign up first.')
+          }
           setLoading(false)
           return
         }
 
+        // ✅ Save session with fresh data
         localStorage.setItem('govmind_session', JSON.stringify({
           name: user.name,
           email: user.email,
         }))
 
-        setSuccess('Welcome back! Redirecting...')
-        await new Promise(r => setTimeout(r, 800))
+        setSuccess(`Welcome back, ${user.name}! Redirecting...`)
+        await new Promise(r => setTimeout(r, 700))
         router.push('/apply')
       }
-
     } catch (_e) {
       setError('Something went wrong. Please try again.')
     } finally {
@@ -101,7 +135,6 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-md">
 
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-[#1B4F72] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-glow">
             <Landmark className="w-8 h-8 text-white" />
@@ -112,63 +145,48 @@ export default function LoginPage() {
           <p className="text-gray-500 text-sm mt-1">Government Services, Automated with AI</p>
         </div>
 
-        {/* Card */}
         <div className="bg-white rounded-2xl shadow-card p-8">
-          <h2 className="font-semibold text-[#1B4F72] text-xl mb-6">
+          <h2 className="font-semibold text-[#1B4F72] text-xl mb-2">
             {isSignup ? 'Create your account' : 'Welcome back'}
           </h2>
+          <p className="text-gray-400 text-sm mb-6">
+            {isSignup
+              ? 'Sign up to track your permit applications'
+              : 'Sign in to view your applications'
+            }
+          </p>
 
           <div className="space-y-4">
             {isSignup && (
               <div>
                 <label className="label">
-                  <User className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />
-                  Full Name
+                  <User className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />Full Name
                 </label>
-                <input
-                  className="input"
-                  placeholder="John Doe"
-                  value={form.name}
-                  onChange={e => update('name', e.target.value)}
-                />
+                <input className="input" placeholder="John Doe"
+                  value={form.name} onChange={e => update('name', e.target.value)} />
               </div>
             )}
-
             <div>
               <label className="label">
-                <Mail className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />
-                Email Address
+                <Mail className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />Email Address
               </label>
-              <input
-                className="input"
-                type="email"
-                placeholder="you@example.com"
-                value={form.email}
-                onChange={e => update('email', e.target.value)}
-              />
+              <input className="input" type="email" placeholder="you@example.com"
+                value={form.email} onChange={e => update('email', e.target.value)} />
             </div>
-
             <div>
               <label className="label">
-                <Lock className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />
-                Password
+                <Lock className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />Password
               </label>
               <div className="relative">
-                <input
-                  className="input pr-10"
+                <input className="input pr-10"
                   type={showPass ? 'text' : 'password'}
                   placeholder="Min 6 characters"
                   value={form.password}
                   onChange={e => update('password', e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                />
-                <button
-                  onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
-                  {showPass
-                    ? <EyeOff className="w-4 h-4" />
-                    : <Eye className="w-4 h-4" />
-                  }
+                  onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
+                <button onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -179,16 +197,13 @@ export default function LoginPage() {
               <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
             </div>
           )}
-
           {success && (
             <div className="flex items-center gap-2 bg-green-50 border border-green-100 text-green-700 text-sm px-4 py-3 rounded-xl mt-4">
               <span>✅</span>{success}
             </div>
           )}
 
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
+          <button onClick={handleSubmit} disabled={loading}
             className="w-full flex items-center justify-center gap-2 bg-[#1B4F72] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#154360] disabled:opacity-50 active:scale-95 transition-all mt-6">
             {loading
               ? <><Loader2 className="w-4 h-4 animate-spin" />Please wait...</>
@@ -197,8 +212,7 @@ export default function LoginPage() {
           </button>
 
           <div className="text-center mt-4">
-            <button
-              onClick={() => { setIsSignup(!isSignup); setError(''); setSuccess('') }}
+            <button onClick={() => { setIsSignup(!isSignup); setError(''); setSuccess('') }}
               className="text-sm text-gray-500 hover:text-[#1B4F72] transition-colors">
               {isSignup
                 ? 'Already have an account? Sign in'
