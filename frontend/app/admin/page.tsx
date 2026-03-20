@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   FileText, Clock, CheckCircle, AlertTriangle,
   Loader2, X, Check, ChevronDown, RefreshCw,
-  Lock, Mail, AlertCircle
+  Lock, Mail, Wifi, WifiOff
 } from 'lucide-react'
 import AuditTraceViewer from '@/components/AuditTraceViewer'
 import { type PermitListItem, type PermitResponse } from '@/lib/api'
@@ -42,7 +42,8 @@ export default function AdminPage() {
 
   const [permits, setPermits] = useState<PermitListItem[]>([])
   const [loading, setLoading] = useState(false)
-  const [loadError, setLoadError] = useState('')
+  const [serverStatus, setServerStatus] = useState<'unknown' | 'waking' | 'online' | 'offline'>('unknown')
+  const [loadingStep, setLoadingStep] = useState('')
   const [filter, setFilter] = useState('')
   const [modal, setModal] = useState<Modal | null>(null)
   const [reason, setReason] = useState('')
@@ -50,10 +51,14 @@ export default function AdminPage() {
   const [submitting, setSubmitting] = useState(false)
   const [modalError, setModalError] = useState('')
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const auth = sessionStorage.getItem('govmind_admin')
     if (auth === 'true') setAdminAuth(true)
+    return () => {
+      if (retryRef.current) clearTimeout(retryRef.current)
+    }
   }, [])
 
   const handleAdminLogin = () => {
@@ -77,34 +82,59 @@ export default function AdminPage() {
     setPermits([])
   }
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setLoadError('')
+  const load = useCallback(async (isAutoRetry = false) => {
+    if (!isAutoRetry) {
+      setLoading(true)
+      setServerStatus('waking')
+      setLoadingStep('Waking up server...')
+    }
+
     try {
       const params = new URLSearchParams()
       if (filter) params.append('status', filter)
 
       const res = await fetch(`/api/permits/all?${params}`, {
         cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache' }
+        headers: { 'Cache-Control': 'no-cache' },
       })
+
+      if (res.status === 202) {
+        // Server still waking — auto retry in 5 seconds
+        setLoadingStep('Server is waking up... please wait (this takes ~60 seconds)')
+        setServerStatus('waking')
+        retryRef.current = setTimeout(() => load(true), 5000)
+        return
+      }
 
       if (res.ok) {
         const data = await res.json()
-        setPermits(Array.isArray(data) ? data : [])
-        setLastRefresh(new Date())
+        if (Array.isArray(data)) {
+          setPermits(data)
+          setLastRefresh(new Date())
+          setServerStatus('online')
+          setLoading(false)
+          setLoadingStep('')
+        } else {
+          // Got non-array — retry
+          retryRef.current = setTimeout(() => load(true), 5000)
+        }
       } else {
-        setLoadError('Failed to load applications. Click Refresh to try again.')
+        setServerStatus('offline')
+        setLoadingStep('Connection failed. Retrying...')
+        retryRef.current = setTimeout(() => load(true), 5000)
       }
     } catch (_e) {
-      setLoadError('Connection error. Click Refresh to try again.')
-    } finally {
-      setLoading(false)
+      setServerStatus('waking')
+      setLoadingStep('Connecting to server... retrying...')
+      retryRef.current = setTimeout(() => load(true), 5000)
     }
   }, [filter])
 
   useEffect(() => {
-    if (adminAuth) load()
+    if (adminAuth) {
+      setLoading(true)
+      load()
+    }
   }, [filter, adminAuth, load])
 
   const openModal = async (permit: PermitListItem, action: 'APPROVED' | 'REJECTED') => {
@@ -137,12 +167,10 @@ export default function AdminPage() {
           reviewed_by: reviewer,
         }),
       })
-
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || err.detail || 'Submission failed')
       }
-
       setPermits(p =>
         p.map(x => x.id === modal.permit.id ? { ...x, status: modal.action } : x)
       )
@@ -154,7 +182,19 @@ export default function AdminPage() {
     }
   }
 
-  // Admin login gate
+  // Apply filter client-side
+  const filteredPermits = filter
+    ? permits.filter(p => p.status === filter)
+    : permits
+
+  const counts = {
+    total:    permits.length,
+    pending:  permits.filter(p => p.status === 'PENDING').length,
+    approved: permits.filter(p => p.status === 'APPROVED').length,
+    flagged:  permits.filter(p => ['FLAGGED','REJECTED','HUMAN_REVIEW'].includes(p.status)).length,
+  }
+
+  // Login gate
   if (!adminAuth) {
     return (
       <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center px-6">
@@ -170,14 +210,11 @@ export default function AdminPage() {
               <label className="label">
                 <Mail className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />Admin Email
               </label>
-              <input
-                type="email"
-                className="input"
+              <input type="email" className="input"
                 placeholder="Enter admin email"
                 value={adminEmail}
                 onChange={e => setAdminEmail(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAdminLogin()}
-              />
+                onKeyDown={e => e.key === 'Enter' && handleAdminLogin()} />
             </div>
             <div>
               <label className="label">
@@ -190,10 +227,8 @@ export default function AdminPage() {
                   placeholder="Enter admin password"
                   value={adminPass}
                   onChange={e => setAdminPass(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAdminLogin()}
-                />
-                <button
-                  onClick={() => setShowPass(!showPass)}
+                  onKeyDown={e => e.key === 'Enter' && handleAdminLogin()} />
+                <button onClick={() => setShowPass(!showPass)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600">
                   {showPass ? 'Hide' : 'Show'}
                 </button>
@@ -207,8 +242,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          <button
-            onClick={handleAdminLogin}
+          <button onClick={handleAdminLogin}
             className="w-full bg-[#1B4F72] text-white py-3 rounded-xl font-medium hover:bg-[#154360] active:scale-95 transition-all mt-4">
             Access Dashboard
           </button>
@@ -218,13 +252,6 @@ export default function AdminPage() {
         </div>
       </div>
     )
-  }
-
-  const counts = {
-    total:    permits.length,
-    pending:  permits.filter(p => p.status === 'PENDING').length,
-    approved: permits.filter(p => p.status === 'APPROVED').length,
-    flagged:  permits.filter(p => ['FLAGGED','REJECTED','HUMAN_REVIEW'].includes(p.status)).length,
   }
 
   const statCards = [
@@ -237,40 +264,53 @@ export default function AdminPage() {
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
 
+      {/* Header */}
       <div className="mb-8 flex items-start justify-between">
         <div>
           <span className="text-xs font-semibold text-[#F39C12] tracking-widest uppercase mb-2 block">
             Admin Portal
           </span>
           <h1 className="font-serif text-4xl text-[#1B4F72]">Applications Dashboard</h1>
-          <p className="text-gray-500 mt-1">
-            Review and manage permit applications.
-            {lastRefresh && (
-              <span className="text-xs text-gray-400 ml-2">
-                Last updated: {lastRefresh.toLocaleTimeString()}
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-gray-500">Review and manage permit applications.</p>
+            {serverStatus === 'online' && (
+              <span className="flex items-center gap-1 text-xs text-green-600">
+                <Wifi className="w-3 h-3" />Server online
               </span>
             )}
-          </p>
+            {serverStatus === 'waking' && (
+              <span className="flex items-center gap-1 text-xs text-amber-600">
+                <Loader2 className="w-3 h-3 animate-spin" />Server waking up...
+              </span>
+            )}
+            {serverStatus === 'offline' && (
+              <span className="flex items-center gap-1 text-xs text-red-500">
+                <WifiOff className="w-3 h-3" />Reconnecting...
+              </span>
+            )}
+          </div>
+          {lastRefresh && (
+            <p className="text-xs text-gray-400 mt-1">
+              Last updated: {lastRefresh.toLocaleTimeString()}
+            </p>
+          )}
         </div>
-        <button
-          onClick={handleLock}
+        <button onClick={handleLock}
           className="flex items-center gap-2 text-sm text-gray-400 hover:text-red-500 transition-colors px-3 py-2 rounded-lg hover:bg-red-50 border border-gray-200">
           <Lock className="w-4 h-4" />Lock
         </button>
       </div>
 
-      {/* Load error banner */}
-      {loadError && (
-        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-700 px-5 py-4 rounded-xl mb-6">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="font-medium text-sm">{loadError}</p>
-            <p className="text-xs mt-0.5 text-amber-600">The server may be waking up — this can take 30-60 seconds.</p>
+      {/* Waking up banner */}
+      {loading && loadingStep && (
+        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 text-blue-700 px-5 py-4 rounded-xl mb-6">
+          <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
+          <div>
+            <p className="font-medium text-sm">{loadingStep}</p>
+            <p className="text-xs mt-0.5 text-blue-600">
+              Render free tier sleeps after inactivity. First load takes 30-60 seconds.
+            </p>
           </div>
-          <button onClick={load}
-            className="text-sm font-medium text-amber-700 hover:text-amber-900 underline">
-            Retry
-          </button>
         </div>
       )}
 
@@ -302,35 +342,62 @@ export default function AdminPage() {
           </select>
           <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
-        <button onClick={load} disabled={loading}
+        <button
+          onClick={() => {
+            if (retryRef.current) clearTimeout(retryRef.current)
+            setLoading(true)
+            setServerStatus('waking')
+            setLoadingStep('Refreshing...')
+            load()
+          }}
+          disabled={loading}
           className="flex items-center gap-2 bg-white border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl text-sm font-medium hover:border-[#1B4F72] hover:text-[#1B4F72] transition-all disabled:opacity-50">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           {loading ? 'Loading...' : 'Refresh'}
         </button>
         <span className="text-xs text-gray-400 ml-auto">
-          {permits.length} application{permits.length !== 1 ? 's' : ''}
+          {filteredPermits.length} application{filteredPermits.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       {/* Table */}
       <div className="bg-white rounded-2xl shadow-card overflow-hidden border border-gray-100">
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <Loader2 className="w-8 h-8 text-[#1B4F72] animate-spin mx-auto mb-3" />
-              <p className="text-sm text-gray-500 font-medium">Loading applications...</p>
-              <p className="text-xs text-gray-400 mt-1">Waking up server, please wait up to 60 seconds</p>
+        {loading && permits.length === 0 ? (
+          <div className="flex items-center justify-center py-24">
+            <div className="text-center max-w-sm">
+              <div className="relative w-16 h-16 mx-auto mb-4">
+                <div className="w-16 h-16 rounded-full border-4 border-[#1B4F72]/20 border-t-[#1B4F72] animate-spin" />
+              </div>
+              <p className="text-[#1B4F72] font-semibold text-lg mb-2">
+                Loading Applications
+              </p>
+              <p className="text-gray-500 text-sm leading-relaxed">
+                {loadingStep || 'Connecting to server...'}
+              </p>
+              <p className="text-gray-400 text-xs mt-3">
+                This may take up to 60 seconds on first load
+              </p>
             </div>
           </div>
-        ) : permits.length === 0 ? (
+        ) : filteredPermits.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
             <FileText className="w-10 h-10 mx-auto mb-3 text-gray-200" />
             <p className="font-medium text-gray-500">No applications found</p>
-            <p className="text-sm mt-1">Try clicking Refresh or changing the filter</p>
-            <button onClick={load}
-              className="mt-4 text-sm text-[#1B4F72] underline hover:no-underline">
-              Click here to reload
-            </button>
+            <p className="text-sm mt-1 mb-4">
+              {loading ? 'Still loading...' : 'Try changing the filter or refreshing'}
+            </p>
+            {!loading && (
+              <button
+                onClick={() => {
+                  setLoading(true)
+                  setServerStatus('waking')
+                  setLoadingStep('Retrying...')
+                  load()
+                }}
+                className="text-sm text-[#1B4F72] underline">
+                Click to retry
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -345,7 +412,7 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {permits.map((p, i) => (
+                {filteredPermits.map((p, i) => (
                   <tr key={p.id}
                     className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${i % 2 === 0 ? '' : 'bg-gray-50/20'}`}>
                     <td className="px-5 py-4">
