@@ -4,13 +4,14 @@ export const maxDuration = 60
 
 const BACKEND = 'https://govmind-ai.onrender.com'
 
-export async function POST(request: NextRequest) {
-  // ✅ Extract ID from URL directly — no params dependency
-  const url = request.nextUrl.pathname
-  const id = url.split('/api/review/')[1]?.replace(/\/$/, '')
+export async function POST(
+  request: NextRequest,
+  context: { params: { id: string } }
+) {
+  const id = context.params.id
 
-  if (!id || id === 'undefined') {
-    return NextResponse.json({ error: 'Missing permit ID' }, { status: 400 })
+  if (!id) {
+    return NextResponse.json({ error: 'Missing ID' }, { status: 400 })
   }
 
   let body: unknown
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
     await new Promise(r => setTimeout(r, 4000))
   }
 
-  // Submit with retries
+  // Submit review with retries
   for (let i = 0; i < 5; i++) {
     try {
       const res = await fetch(
@@ -42,9 +43,11 @@ export async function POST(request: NextRequest) {
         }
       )
       const data = await res.json()
-      if (res.ok) return NextResponse.json(data, { status: 200 })
+      if (res.ok) {
+        return NextResponse.json(data, { status: 200 })
+      }
       return NextResponse.json(
-        { error: data.detail || data.error || 'Review failed' },
+        { error: data.detail || data.error || `Server error ${res.status}` },
         { status: res.status }
       )
     } catch (_e) {
