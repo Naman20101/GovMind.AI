@@ -6,9 +6,8 @@ import {
   Building2, User, Hash, MapPin, FileUp,
   ChevronRight, ChevronLeft, Check, Lock,
   AlertCircle, Loader2, CheckCircle,
-  AlertTriangle, Shield, Users, Info
+  AlertTriangle, Shield, Users, Info, X
 } from 'lucide-react'
-
 const API_BASE = '/api'
 const STEPS = ['Business Info', 'Location', 'Documents']
 const PERMIT_TYPES = [
