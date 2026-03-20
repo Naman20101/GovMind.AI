@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Building2, User, Hash, MapPin, FileUp,
   ChevronRight, ChevronLeft, Check, Lock,
   AlertCircle, Loader2, CheckCircle,
-  AlertTriangle, Shield, Users
+  AlertTriangle, Shield, Users, Mail
 } from 'lucide-react'
 
 const API_BASE = '/api'
@@ -29,6 +29,8 @@ interface PermitResult {
   audit_trace: Record<string, unknown> | null
 }
 
+interface Session { name: string; email: string }
+
 function HumanReviewButton({ permitId }: { permitId: string }) {
   const [sent, setSent] = useState(false)
   const [sending, setSending] = useState(false)
@@ -51,11 +53,11 @@ function HumanReviewButton({ permitId }: { permitId: string }) {
   }
 
   if (sent) return (
-    <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 px-4 py-3 rounded-xl">
-      <CheckCircle className="w-4 h-4 flex-shrink-0" />
+    <div className="flex items-start gap-2 text-sm text-green-700 bg-green-50 border border-green-200 px-4 py-3 rounded-xl">
+      <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
       <div>
-        <p className="font-medium">Request sent successfully</p>
-        <p className="text-xs text-green-600 mt-0.5">A government officer will review your application. You will be notified of the outcome.</p>
+        <p className="font-medium">Review request sent</p>
+        <p className="text-xs text-green-600 mt-0.5">A government officer will review your application shortly.</p>
       </div>
     </div>
   )
@@ -64,7 +66,7 @@ function HumanReviewButton({ permitId }: { permitId: string }) {
     <button onClick={request} disabled={sending}
       className="w-full flex items-center justify-center gap-2 border border-[#1B4F72] text-[#1B4F72] px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#1B4F72] hover:text-white disabled:opacity-40 active:scale-95 transition-all">
       {sending
-        ? <><Loader2 className="w-4 h-4 animate-spin" />Sending request...</>
+        ? <><Loader2 className="w-4 h-4 animate-spin" />Sending...</>
         : <><Users className="w-4 h-4" />Request Human Review</>
       }
     </button>
@@ -78,11 +80,19 @@ export default function ApplyPage() {
   const [error, setError] = useState('')
   const [result, setResult] = useState<PermitResult | null>(null)
   const [taxMasked, setTaxMasked] = useState(false)
+  const [session, setSession] = useState<Session | null>(null)
   const [form, setForm] = useState({
     business_name: '', permit_type: '', owner_name: '',
     tax_id: '', address: '', city: '', state: '', zip: '',
     file: null as File | null,
   })
+
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem('govmind_session')
+      if (s) setSession(JSON.parse(s))
+    } catch (_e) { /* ignore */ }
+  }, [])
 
   const update = (f: string, v: string) => setForm(p => ({ ...p, [f]: v }))
 
@@ -113,6 +123,8 @@ export default function ApplyPage() {
       fd.append('address', `${form.address}, ${form.city} ${form.state} ${form.zip}`)
       fd.append('permit_type', form.permit_type)
       fd.append('file', form.file)
+      // ✅ Always send applicant email
+      fd.append('applicant_email', session?.email || '')
 
       setLoadingMsg('🤖 AI is reviewing your application...')
 
@@ -128,6 +140,21 @@ export default function ApplyPage() {
 
       const data = await res.json()
       if (!data?.id) throw new Error('No application ID returned')
+
+      // ✅ Save permit ID to user's local history
+      if (session?.email) {
+        const key = `govmind_permits_${session.email}`
+        const existing = JSON.parse(localStorage.getItem(key) || '[]')
+        existing.unshift({
+          id: data.id,
+          business_name: form.business_name,
+          permit_type: form.permit_type,
+          status: data.status,
+          submitted_at: new Date().toISOString(),
+        })
+        localStorage.setItem(key, JSON.stringify(existing.slice(0, 50)))
+      }
+
       setResult(data)
 
     } catch (e: unknown) {
@@ -137,26 +164,19 @@ export default function ApplyPage() {
     }
   }
 
-  // Result page shown inline after submission
   if (result) {
     const isApproved = result.ai_decision === 'APPROVED'
 
     return (
       <div className="max-w-2xl mx-auto px-6 py-12 space-y-6">
-
-        {/* Status */}
         <div className="card text-center">
-          <div className={`w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${
-            isApproved ? 'bg-green-50' : 'bg-amber-50'
-          }`}>
+          <div className={`w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${isApproved ? 'bg-green-50' : 'bg-amber-50'}`}>
             {isApproved
               ? <CheckCircle className="w-8 h-8 text-[#27AE60]" />
               : <AlertTriangle className="w-8 h-8 text-[#F39C12]" />
             }
           </div>
-          <span className="text-xs text-gray-400 font-mono block mb-2">
-            APP-{result.id.slice(0, 8).toUpperCase()}
-          </span>
+          <span className="text-xs text-gray-400 font-mono block mb-2">APP-{result.id.slice(0,8).toUpperCase()}</span>
           <h1 className="font-serif text-2xl text-[#1B4F72] mb-1">{result.business_name}</h1>
           <p className="text-sm text-gray-500 mb-4">{result.permit_type}</p>
           <span className={`badge text-sm px-4 py-2 ${isApproved ? 'badge-approved' : 'badge-flagged'}`}>
@@ -164,7 +184,6 @@ export default function ApplyPage() {
           </span>
         </div>
 
-        {/* AI Decision */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-[#1B4F72]">🤖 AI Decision</h2>
@@ -179,8 +198,7 @@ export default function ApplyPage() {
                 <span className="font-semibold text-[#1B4F72]">{result.ai_confidence}%</span>
               </div>
               <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-[#1B4F72] rounded-full"
-                  style={{ width: `${result.ai_confidence}%` }} />
+                <div className="h-full bg-[#1B4F72] rounded-full" style={{ width: `${result.ai_confidence}%` }} />
               </div>
             </div>
           )}
@@ -192,7 +210,6 @@ export default function ApplyPage() {
           <HumanReviewButton permitId={result.id} />
         </div>
 
-        {/* Protected info */}
         <div className="card">
           <div className="flex items-center gap-2 mb-4">
             <Lock className="w-4 h-4 text-[#1B4F72]" />
@@ -214,7 +231,6 @@ export default function ApplyPage() {
           </div>
         </div>
 
-        {/* Audit */}
         {result.audit_trace && (
           <div className="card">
             <div className="flex items-center gap-3 mb-3">
@@ -239,7 +255,6 @@ export default function ApplyPage() {
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex gap-3">
           <button
             onClick={() => {
@@ -251,9 +266,9 @@ export default function ApplyPage() {
             className="flex-1 border border-gray-200 text-gray-600 px-4 py-3 rounded-xl text-sm font-medium hover:bg-gray-50 transition-all">
             Submit Another
           </button>
-          <a href="/"
+          <a href="/status"
             className="flex-1 bg-[#1B4F72] text-white px-4 py-3 rounded-xl text-sm font-medium text-center hover:bg-[#154360] transition-all">
-            Back to Home
+            View My Applications
           </a>
         </div>
       </div>
@@ -268,9 +283,14 @@ export default function ApplyPage() {
         </span>
         <h1 className="font-serif text-4xl text-[#1B4F72]">Apply for a Permit</h1>
         <p className="text-gray-500 mt-2">Get an AI-powered decision in minutes.</p>
+        {session && (
+          <div className="flex items-center gap-2 mt-3 bg-[#1B4F72]/5 border border-[#1B4F72]/10 rounded-xl px-4 py-2.5 w-fit">
+            <Mail className="w-3.5 h-3.5 text-[#1B4F72]" />
+            <span className="text-sm text-[#1B4F72] font-medium">Applying as {session.name}</span>
+          </div>
+        )}
       </div>
 
-      {/* Step indicator */}
       <div className="flex items-center gap-0 mb-10">
         {STEPS.map((label, i) => (
           <div key={label} className="flex items-center flex-1 last:flex-none">
@@ -282,9 +302,9 @@ export default function ApplyPage() {
               }`}>
                 {i < step ? <Check className="w-4 h-4" /> : i + 1}
               </div>
-              <span className={`text-xs mt-1.5 font-medium whitespace-nowrap ${
-                i === step ? 'text-[#1B4F72]' : 'text-gray-400'
-              }`}>{label}</span>
+              <span className={`text-xs mt-1.5 font-medium whitespace-nowrap ${i === step ? 'text-[#1B4F72]' : 'text-gray-400'}`}>
+                {label}
+              </span>
             </div>
             {i < STEPS.length - 1 && (
               <div className={`flex-1 h-px mx-3 mb-5 ${i < step ? 'bg-[#27AE60]' : 'bg-gray-200'}`} />
@@ -293,7 +313,6 @@ export default function ApplyPage() {
         ))}
       </div>
 
-      {/* Loading overlay */}
       {loading && (
         <div className="bg-white rounded-2xl shadow-card p-12 text-center">
           <Loader2 className="w-12 h-12 text-[#1B4F72] animate-spin mx-auto mb-4" />
