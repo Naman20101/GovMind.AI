@@ -37,127 +37,56 @@ def validate_file(file: UploadFile):
         raise HTTPException(status_code=400, detail=f"File too large. Max {settings.MAX_UPLOAD_SIZE_MB}MB.")
 
 
-def send_decision_email(
-    to_email: str,
-    business_name: str,
-    decision: str,
-    reason: str,
-    permit_id: str,
-    reviewed_by: str = "GovMind.AI"
-):
-    """Send email when admin approves or rejects."""
+def send_decision_email(to_email, business_name, decision, reason, permit_id, reviewed_by="GovMind.AI"):
     if not to_email or '@' not in to_email:
-        print(f"No valid email to notify — skipping")
         return
-
     try:
         resend_key = os.getenv("RESEND_API_KEY")
         if not resend_key:
-            print(f"No RESEND_API_KEY — skipping email to {to_email}")
+            print(f"No RESEND_API_KEY — skipping email")
             return
-
         import resend
         resend.api_key = resend_key
-
         is_approved = decision == "APPROVED"
         emoji = "✅" if is_approved else "❌"
         color = "#27AE60" if is_approved else "#E74C3C"
-        bg_color = "#F0FFF4" if is_approved else "#FFF5F5"
         status_text = "Approved" if is_approved else "Rejected"
-
         resend.Emails.send({
             "from": "GovMind.AI <decisions@govmind.ai>",
             "to": to_email,
-            "subject": f"{emoji} Permit Application {status_text} — {business_name}",
+            "subject": f"{emoji} Permit {status_text} — {business_name}",
             "html": f"""
-            <!DOCTYPE html>
-            <html>
-            <body style="margin:0;padding:0;background:#F4F6F9;font-family:'DM Sans',Arial,sans-serif;">
-              <div style="max-width:600px;margin:40px auto;background:white;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-
-                <!-- Header -->
-                <div style="background:#1B4F72;padding:32px;text-align:center;">
-                  <h1 style="color:white;margin:0;font-size:24px;font-weight:700;">
-                    🏛️ GovMind.AI
-                  </h1>
-                  <p style="color:rgba(255,255,255,0.7);margin:8px 0 0;font-size:14px;">
-                    Government Services, Automated with AI
-                  </p>
-                </div>
-
-                <!-- Status badge -->
-                <div style="background:{bg_color};padding:32px;text-align:center;border-bottom:1px solid #E5E7EB;">
-                  <div style="font-size:48px;margin-bottom:12px;">{emoji}</div>
-                  <h2 style="color:{color};margin:0;font-size:28px;font-weight:700;">
-                    Application {status_text}
-                  </h2>
-                  <p style="color:#6B7280;margin:8px 0 0;font-size:14px;">
-                    Your permit application has been reviewed
-                  </p>
-                </div>
-
-                <!-- Content -->
-                <div style="padding:32px;">
-                  <p style="color:#374151;font-size:16px;margin:0 0 24px;">
-                    Your permit application for <strong style="color:#1B4F72;">{business_name}</strong> has been <strong style="color:{color};">{status_text.lower()}</strong> by a government officer.
-                  </p>
-
-                  <!-- Reason box -->
-                  <div style="background:#F4F6F9;border-left:4px solid {color};border-radius:8px;padding:16px;margin-bottom:24px;">
-                    <p style="color:#6B7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px;">
-                      Decision Reason
-                    </p>
-                    <p style="color:#374151;font-size:15px;margin:0;line-height:1.6;">
-                      {reason}
-                    </p>
-                  </div>
-
-                  <!-- Details -->
-                  <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin-bottom:24px;">
-                    <table style="width:100%;border-collapse:collapse;">
-                      <tr>
-                        <td style="color:#6B7280;font-size:13px;padding:4px 0;">Application ID</td>
-                        <td style="color:#1B4F72;font-size:13px;font-family:monospace;text-align:right;">APP-{permit_id[:8].upper()}</td>
-                      </tr>
-                      <tr>
-                        <td style="color:#6B7280;font-size:13px;padding:4px 0;">Decision By</td>
-                        <td style="color:#374151;font-size:13px;text-align:right;">{reviewed_by}</td>
-                      </tr>
-                      <tr>
-                        <td style="color:#6B7280;font-size:13px;padding:4px 0;">Date</td>
-                        <td style="color:#374151;font-size:13px;text-align:right;">{datetime.utcnow().strftime('%B %d, %Y')}</td>
-                      </tr>
-                    </table>
-                  </div>
-
-                  <!-- CTA -->
-                  {"<p style='color:#374151;font-size:14px;margin:0 0 16px;'>Your permit has been approved. You may proceed with your business operations.</p>" if is_approved else "<p style='color:#374151;font-size:14px;margin:0 0 16px;'>You may address the issues mentioned above and submit a new application.</p>"}
-
-                  <a href="https://gov-mind-ai-wd4n.vercel.app/apply"
-                    style="display:inline-block;background:#1B4F72;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">
-                    {"View Approval →" if is_approved else "Submit New Application →"}
-                  </a>
-                </div>
-
-                <!-- Footer -->
-                <div style="background:#F4F6F9;padding:24px;text-align:center;border-top:1px solid #E5E7EB;">
-                  <p style="color:#9CA3AF;font-size:12px;margin:0;">
-                    🔒 All decisions are auditable and human-reversible.<br/>
-                    GovMind.AI — Government Services, Automated with AI
-                  </p>
-                </div>
-
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+              <div style="background:#1B4F72;padding:24px;border-radius:12px 12px 0 0;text-align:center;">
+                <h1 style="color:white;margin:0;">🏛️ GovMind.AI</h1>
               </div>
-            </body>
-            </html>
+              <div style="background:white;padding:32px;border:1px solid #e5e7eb;border-radius:0 0 12px 12px;">
+                <h2 style="color:{color};text-align:center;">{emoji} Application {status_text}</h2>
+                <p>Your permit application for <strong>{business_name}</strong> has been <strong style="color:{color};">{status_text.lower()}</strong>.</p>
+                <div style="background:#f4f6f9;border-left:4px solid {color};padding:16px;border-radius:8px;margin:16px 0;">
+                  <strong>Reason:</strong><br/>{reason}
+                </div>
+                <p style="color:#6b7280;font-size:12px;">
+                  Application ID: APP-{permit_id[:8].upper()}<br/>
+                  Reviewed by: {reviewed_by}<br/>
+                  Date: {datetime.utcnow().strftime('%B %d, %Y')}
+                </p>
+                <a href="https://gov-mind-ai-wd4n.vercel.app/apply"
+                  style="display:inline-block;background:#1B4F72;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">
+                  {"View Details →" if is_approved else "Submit New Application →"}
+                </a>
+                <p style="color:#9ca3af;font-size:11px;margin-top:24px;">
+                  🔒 All decisions are auditable and human-reversible. GovMind.AI
+                </p>
+              </div>
+            </div>
             """
         })
-        print(f"✅ Decision email sent to {to_email} — {decision}")
+        print(f"✅ Email sent to {to_email} — {decision}")
     except Exception as e:
-        print(f"❌ Email send failed: {repr(e)}")
+        print(f"❌ Email failed: {repr(e)}")
 
 
-# ✅ /all MUST come before /{application_id}
 @router.get("/all", response_model=list[PermitListItem])
 def list_permits(
     status: str = None,
@@ -189,7 +118,6 @@ async def submit_permit(
     db: Session = Depends(get_db)
 ):
     validate_file(file)
-
     os.makedirs("/tmp/govbox", exist_ok=True)
     ext = "pdf" if file.content_type == "application/pdf" else "img"
     file_path = f"/tmp/govbox/{uuid.uuid4()}.{ext}"
@@ -201,13 +129,8 @@ async def submit_permit(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
-    masked = mask_pii({
-        "owner_name": owner_name,
-        "tax_id": tax_id,
-        "address": address
-    })
+    masked = mask_pii({"owner_name": owner_name, "tax_id": tax_id, "address": address})
 
-    # Save to DB first
     permit = PermitApplication(
         business_name=business_name,
         owner_name_masked=masked["owner_name"],
@@ -219,7 +142,7 @@ async def submit_permit(
         audit_trace={
             "timestamp": datetime.utcnow().isoformat(),
             "decision": "PENDING",
-            "reason": "Application received and queued for review.",
+            "reason": "Application received.",
             "confidence": 0.0,
             "reversible_by": "admin",
             "trace_id": str(uuid.uuid4()),
@@ -230,7 +153,6 @@ async def submit_permit(
     db.commit()
     db.refresh(permit)
 
-    # AI review after commit
     try:
         review = auto_review_business_permit(file_path)
         permit.ai_decision = review["decision"]
@@ -244,10 +166,10 @@ async def submit_permit(
         db.commit()
         db.refresh(permit)
     except Exception as e:
-        print(f"Review error (non-fatal): {str(e)}")
+        print(f"Review error: {str(e)}")
         permit.status = "PENDING"
         permit.ai_decision = "PENDING"
-        permit.ai_reason = "Application received. Manual review in progress."
+        permit.ai_reason = "Manual review in progress."
         permit.ai_confidence = 85.0
         db.commit()
         db.refresh(permit)
@@ -257,7 +179,10 @@ async def submit_permit(
 
 @router.get("/{application_id}", response_model=PermitResponse)
 def get_permit(application_id: str, db: Session = Depends(get_db)):
-    permit = db.get(PermitApplication, application_id)
+    # ✅ Use query instead of db.get — more reliable
+    permit = db.query(PermitApplication).filter(
+        PermitApplication.id == application_id
+    ).first()
     if not permit:
         raise HTTPException(status_code=404, detail="Application not found.")
     return permit
@@ -269,7 +194,10 @@ def review_permit(
     body: HumanReviewRequest,
     db: Session = Depends(get_db)
 ):
-    permit = db.get(PermitApplication, application_id)
+    # ✅ Use query instead of db.get — more reliable
+    permit = db.query(PermitApplication).filter(
+        PermitApplication.id == application_id
+    ).first()
     if not permit:
         raise HTTPException(status_code=404, detail="Application not found.")
 
@@ -278,18 +206,17 @@ def review_permit(
     permit.reviewed_at = datetime.utcnow()
     permit.human_override_reason = body.reason
 
-    # Append to audit trace — immutable
     trace = permit.audit_trace or []
+    applicant_email = ""
+
     if isinstance(trace, dict):
         applicant_email = trace.get("applicant_email", "")
         trace = [trace]
-    else:
-        applicant_email = ""
-        if trace:
-            for entry in trace:
-                if isinstance(entry, dict) and entry.get("applicant_email"):
-                    applicant_email = entry["applicant_email"]
-                    break
+    elif isinstance(trace, list):
+        for entry in trace:
+            if isinstance(entry, dict) and entry.get("applicant_email"):
+                applicant_email = entry["applicant_email"]
+                break
 
     trace.append({
         "type": "human_override",
@@ -305,7 +232,7 @@ def review_permit(
     db.commit()
     db.refresh(permit)
 
-    # ✅ Send email notification to applicant
+    # ✅ Send email on approve or reject
     if applicant_email and body.decision in ["APPROVED", "REJECTED"]:
         send_decision_email(
             to_email=applicant_email,
