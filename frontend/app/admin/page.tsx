@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   FileText, Clock, CheckCircle, AlertTriangle,
-  Loader2, X, Check, ChevronDown, RefreshCw, Lock, Mail
+  Loader2, X, Check, ChevronDown, RefreshCw,
+  Lock, Mail, AlertCircle
 } from 'lucide-react'
 import AuditTraceViewer from '@/components/AuditTraceViewer'
 import { type PermitListItem, type PermitResponse } from '@/lib/api'
@@ -40,13 +41,15 @@ export default function AdminPage() {
   const [showPass, setShowPass] = useState(false)
 
   const [permits, setPermits] = useState<PermitListItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [filter, setFilter] = useState('')
   const [modal, setModal] = useState<Modal | null>(null)
   const [reason, setReason] = useState('')
   const [reviewer, setReviewer] = useState('Naman Reddy')
   const [submitting, setSubmitting] = useState(false)
   const [modalError, setModalError] = useState('')
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
 
   useEffect(() => {
     const auth = sessionStorage.getItem('govmind_admin')
@@ -71,30 +74,38 @@ export default function AdminPage() {
     setAdminAuth(false)
     setAdminEmail('')
     setAdminPass('')
+    setPermits([])
   }
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const params = new URLSearchParams()
       if (filter) params.append('status', filter)
-      params.append('limit', '50')
-      params.append('offset', '0')
-      const res = await fetch(`/api/permits/all?${params}`, { cache: 'no-store' })
+
+      const res = await fetch(`/api/permits/all?${params}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      })
+
       if (res.ok) {
         const data = await res.json()
-        setPermits(data)
+        setPermits(Array.isArray(data) ? data : [])
+        setLastRefresh(new Date())
+      } else {
+        setLoadError('Failed to load applications. Click Refresh to try again.')
       }
     } catch (_e) {
-      setPermits([])
+      setLoadError('Connection error. Click Refresh to try again.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [filter])
 
   useEffect(() => {
     if (adminAuth) load()
-  }, [filter, adminAuth])
+  }, [filter, adminAuth, load])
 
   const openModal = async (permit: PermitListItem, action: 'APPROVED' | 'REJECTED') => {
     setModal({ permit, action })
@@ -126,10 +137,12 @@ export default function AdminPage() {
           reviewed_by: reviewer,
         }),
       })
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Submission failed')
+        throw new Error(err.error || err.detail || 'Submission failed')
       }
+
       setPermits(p =>
         p.map(x => x.id === modal.permit.id ? { ...x, status: modal.action } : x)
       )
@@ -141,28 +154,21 @@ export default function AdminPage() {
     }
   }
 
-  // ✅ Admin login gate
+  // Admin login gate
   if (!adminAuth) {
     return (
       <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center px-6">
         <div className="bg-white rounded-2xl shadow-card p-8 w-full max-w-sm">
-
           <div className="w-14 h-14 bg-[#1B4F72]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Lock className="w-7 h-7 text-[#1B4F72]" />
           </div>
-
-          <h1 className="font-serif text-2xl text-[#1B4F72] text-center mb-1">
-            Admin Portal
-          </h1>
-          <p className="text-gray-500 text-sm text-center mb-6">
-            GovMind.AI — Creator access only
-          </p>
+          <h1 className="font-serif text-2xl text-[#1B4F72] text-center mb-1">Admin Portal</h1>
+          <p className="text-gray-500 text-sm text-center mb-6">GovMind.AI — Creator access only</p>
 
           <div className="space-y-3">
             <div>
               <label className="label">
-                <Mail className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />
-                Admin Email
+                <Mail className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />Admin Email
               </label>
               <input
                 type="email"
@@ -173,16 +179,14 @@ export default function AdminPage() {
                 onKeyDown={e => e.key === 'Enter' && handleAdminLogin()}
               />
             </div>
-
             <div>
               <label className="label">
-                <Lock className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />
-                Password
+                <Lock className="w-3.5 h-3.5 inline mr-1.5 text-gray-400" />Password
               </label>
               <div className="relative">
                 <input
                   type={showPass ? 'text' : 'password'}
-                  className="input pr-10"
+                  className="input pr-16"
                   placeholder="Enter admin password"
                   value={adminPass}
                   onChange={e => setAdminPass(e.target.value)}
@@ -190,8 +194,8 @@ export default function AdminPage() {
                 />
                 <button
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  <span className="text-xs">{showPass ? 'Hide' : 'Show'}</span>
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600">
+                  {showPass ? 'Hide' : 'Show'}
                 </button>
               </div>
             </div>
@@ -199,8 +203,7 @@ export default function AdminPage() {
 
           {adminError && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-xl mt-4">
-              <X className="w-4 h-4 flex-shrink-0" />
-              {adminError}
+              <X className="w-4 h-4 flex-shrink-0" />{adminError}
             </div>
           )}
 
@@ -209,7 +212,6 @@ export default function AdminPage() {
             className="w-full bg-[#1B4F72] text-white py-3 rounded-xl font-medium hover:bg-[#154360] active:scale-95 transition-all mt-4">
             Access Dashboard
           </button>
-
           <p className="text-center text-xs text-gray-400 mt-4">
             🔒 Restricted to authorized personnel only
           </p>
@@ -241,14 +243,36 @@ export default function AdminPage() {
             Admin Portal
           </span>
           <h1 className="font-serif text-4xl text-[#1B4F72]">Applications Dashboard</h1>
-          <p className="text-gray-500 mt-1">Review and manage permit applications.</p>
+          <p className="text-gray-500 mt-1">
+            Review and manage permit applications.
+            {lastRefresh && (
+              <span className="text-xs text-gray-400 ml-2">
+                Last updated: {lastRefresh.toLocaleTimeString()}
+              </span>
+            )}
+          </p>
         </div>
         <button
           onClick={handleLock}
           className="flex items-center gap-2 text-sm text-gray-400 hover:text-red-500 transition-colors px-3 py-2 rounded-lg hover:bg-red-50 border border-gray-200">
-          <Lock className="w-4 h-4" />Lock Portal
+          <Lock className="w-4 h-4" />Lock
         </button>
       </div>
+
+      {/* Load error banner */}
+      {loadError && (
+        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-700 px-5 py-4 rounded-xl mb-6">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium text-sm">{loadError}</p>
+            <p className="text-xs mt-0.5 text-amber-600">The server may be waking up — this can take 30-60 seconds.</p>
+          </div>
+          <button onClick={load}
+            className="text-sm font-medium text-amber-700 hover:text-amber-900 underline">
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -278,9 +302,10 @@ export default function AdminPage() {
           </select>
           <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
-        <button onClick={load}
-          className="flex items-center gap-2 bg-white border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl text-sm font-medium hover:border-[#1B4F72] hover:text-[#1B4F72] transition-all">
-          <RefreshCw className="w-4 h-4" />Refresh
+        <button onClick={load} disabled={loading}
+          className="flex items-center gap-2 bg-white border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl text-sm font-medium hover:border-[#1B4F72] hover:text-[#1B4F72] transition-all disabled:opacity-50">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          {loading ? 'Loading...' : 'Refresh'}
         </button>
         <span className="text-xs text-gray-400 ml-auto">
           {permits.length} application{permits.length !== 1 ? 's' : ''}
@@ -292,15 +317,20 @@ export default function AdminPage() {
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <Loader2 className="w-6 h-6 text-[#1B4F72] animate-spin mx-auto mb-2" />
-              <p className="text-sm text-gray-400">Loading applications...</p>
+              <Loader2 className="w-8 h-8 text-[#1B4F72] animate-spin mx-auto mb-3" />
+              <p className="text-sm text-gray-500 font-medium">Loading applications...</p>
+              <p className="text-xs text-gray-400 mt-1">Waking up server, please wait up to 60 seconds</p>
             </div>
           </div>
         ) : permits.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
             <FileText className="w-10 h-10 mx-auto mb-3 text-gray-200" />
-            <p className="font-medium">No applications found</p>
-            <p className="text-sm mt-1">Try changing the filter or refreshing</p>
+            <p className="font-medium text-gray-500">No applications found</p>
+            <p className="text-sm mt-1">Try clicking Refresh or changing the filter</p>
+            <button onClick={load}
+              className="mt-4 text-sm text-[#1B4F72] underline hover:no-underline">
+              Click here to reload
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -342,7 +372,7 @@ export default function AdminPage() {
                     </td>
                     <td className="px-5 py-4 text-xs text-gray-400">
                       {new Date(p.submitted_at).toLocaleDateString('en-US', {
-                        month: 'short', day: 'numeric'
+                        month: 'short', day: 'numeric', year: 'numeric'
                       })}
                     </td>
                     <td className="px-5 py-4">
@@ -371,10 +401,7 @@ export default function AdminPage() {
       {modal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-up">
-
-            <div className={`p-6 border-b border-gray-100 ${
-              modal.action === 'APPROVED' ? 'bg-green-50' : 'bg-red-50'
-            }`}>
+            <div className={`p-6 border-b border-gray-100 ${modal.action === 'APPROVED' ? 'bg-green-50' : 'bg-red-50'}`}>
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-semibold text-[#1B4F72] text-lg">
@@ -401,21 +428,15 @@ export default function AdminPage() {
                 <label className="label">Reason for Decision</label>
                 <textarea rows={3} className="input resize-none"
                   placeholder="Provide a clear reason (min 10 characters)..."
-                  value={reason}
-                  onChange={e => setReason(e.target.value)} />
-                <p className={`text-xs mt-1 ${
-                  reason.length < 10 && reason.length > 0 ? 'text-red-400' : 'text-gray-400'
-                }`}>
+                  value={reason} onChange={e => setReason(e.target.value)} />
+                <p className={`text-xs mt-1 ${reason.length < 10 && reason.length > 0 ? 'text-red-400' : 'text-gray-400'}`}>
                   {reason.length}/10 minimum
                 </p>
               </div>
 
               <div>
                 <label className="label">Reviewer Name</label>
-                <input className="input"
-                  placeholder="Enter your full name"
-                  value={reviewer}
-                  onChange={e => setReviewer(e.target.value)} />
+                <input className="input" value={reviewer} onChange={e => setReviewer(e.target.value)} />
               </div>
 
               {modalError && (
@@ -431,9 +452,7 @@ export default function AdminPage() {
                 </button>
                 <button onClick={handleReview} disabled={submitting}
                   className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50 active:scale-95 ${
-                    modal.action === 'APPROVED'
-                      ? 'bg-[#27AE60] hover:bg-[#229954]'
-                      : 'bg-[#E74C3C] hover:bg-[#C0392B]'
+                    modal.action === 'APPROVED' ? 'bg-[#27AE60] hover:bg-[#229954]' : 'bg-[#E74C3C] hover:bg-[#C0392B]'
                   }`}>
                   {submitting
                     ? <><Loader2 className="w-4 h-4 animate-spin" />Processing...</>
