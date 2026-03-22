@@ -3,13 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Landmark, Lock, Mail, Eye, EyeOff, Loader2, AlertCircle, User } from 'lucide-react'
-
-interface StoredUser {
-  name: string
-  email: string
-  password: string
-  createdAt: string
-}
+import { supabase } from '@/lib/supabase'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -20,112 +14,45 @@ export default function LoginPage() {
   const [success, setSuccess] = useState('')
   const [form, setForm] = useState({ name: '', email: '', password: '' })
 
-  // ✅ Check if already logged in
   useEffect(() => {
-    try {
-      const session = localStorage.getItem('govmind_session')
-      if (session) {
-        router.push('/apply')
-      }
-    } catch (_e) { /* ignore */ }
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) router.push('/apply')
+    })
   }, [router])
 
   const update = (f: string, v: string) => setForm(p => ({ ...p, [f]: v }))
 
-  const getUsers = (): StoredUser[] => {
-    try {
-      return JSON.parse(localStorage.getItem('govmind_users') || '[]')
-    } catch (_e) {
-      return []
-    }
-  }
-
-  const saveUsers = (users: StoredUser[]) => {
-    localStorage.setItem('govmind_users', JSON.stringify(users))
-  }
-
   const handleSubmit = async () => {
     setError('')
     setSuccess('')
-
-    if (!form.email.trim() || !form.password.trim()) {
-      setError('Please fill in all fields.')
-      return
-    }
-    if (isSignup && !form.name.trim()) {
-      setError('Please enter your name.')
-      return
-    }
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters.')
-      return
-    }
-
+    if (!form.email || !form.password) { setError('Please fill in all fields.'); return }
+    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return }
+    if (isSignup && !form.name) { setError('Please enter your name.'); return }
     setLoading(true)
 
     try {
-      const normalizedEmail = form.email.trim().toLowerCase()
-
       if (isSignup) {
-        const users = getUsers()
-        const exists = users.find(u => u.email === normalizedEmail)
-
-        if (exists) {
-          setError('Account already exists. Please sign in instead.')
-          setLoading(false)
-          return
-        }
-
-        const newUser: StoredUser = {
-          name: form.name.trim(),
-          email: normalizedEmail,
+        const { error: err } = await supabase.auth.signUp({
+          email: form.email,
           password: form.password,
-          createdAt: new Date().toISOString(),
-        }
-
-        users.push(newUser)
-        saveUsers(users)
-
-        // ✅ Save session
-        localStorage.setItem('govmind_session', JSON.stringify({
-          name: newUser.name,
-          email: newUser.email,
-        }))
-
+          options: { data: { name: form.name } }
+        })
+        if (err) throw new Error(err.message)
         setSuccess('Account created! Redirecting...')
-        await new Promise(r => setTimeout(r, 700))
+        await new Promise(r => setTimeout(r, 800))
         router.push('/apply')
-
       } else {
-        const users = getUsers()
-        const user = users.find(
-          u => u.email === normalizedEmail && u.password === form.password
-        )
-
-        if (!user) {
-          // ✅ Helpful error — distinguish wrong password vs no account
-          const emailExists = users.find(u => u.email === normalizedEmail)
-          if (emailExists) {
-            setError('Incorrect password. Please try again.')
-          } else {
-            setError('No account found. Please sign up first.')
-          }
-          setLoading(false)
-          return
-        }
-
-        // ✅ Save session with fresh data
-        localStorage.setItem('govmind_session', JSON.stringify({
-          name: user.name,
-          email: user.email,
-        }))
-
-        setSuccess(`Welcome back, ${user.name}! Redirecting...`)
-        await new Promise(r => setTimeout(r, 700))
+        const { error: err } = await supabase.auth.signInWithPassword({
+          email: form.email,
+          password: form.password,
+        })
+        if (err) throw new Error('Invalid email or password.')
+        setSuccess('Welcome back! Redirecting...')
+        await new Promise(r => setTimeout(r, 800))
         router.push('/apply')
       }
-    } catch (_e) {
-      setError('Something went wrong. Please try again.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong.')
     } finally {
       setLoading(false)
     }
@@ -134,9 +61,8 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-md">
-
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-[#1B4F72] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-glow">
+          <div className="w-16 h-16 bg-[#1B4F72] rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Landmark className="w-8 h-8 text-white" />
           </div>
           <h1 className="font-serif text-3xl text-[#1B4F72]">
@@ -146,16 +72,9 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-card p-8">
-          <h2 className="font-semibold text-[#1B4F72] text-xl mb-2">
+          <h2 className="font-semibold text-[#1B4F72] text-xl mb-6">
             {isSignup ? 'Create your account' : 'Welcome back'}
           </h2>
-          <p className="text-gray-400 text-sm mb-6">
-            {isSignup
-              ? 'Sign up to track your permit applications'
-              : 'Sign in to view your applications'
-            }
-          </p>
-
           <div className="space-y-4">
             {isSignup && (
               <div>
@@ -199,7 +118,7 @@ export default function LoginPage() {
           )}
           {success && (
             <div className="flex items-center gap-2 bg-green-50 border border-green-100 text-green-700 text-sm px-4 py-3 rounded-xl mt-4">
-              <span>✅</span>{success}
+              ✅ {success}
             </div>
           )}
 
@@ -214,17 +133,11 @@ export default function LoginPage() {
           <div className="text-center mt-4">
             <button onClick={() => { setIsSignup(!isSignup); setError(''); setSuccess('') }}
               className="text-sm text-gray-500 hover:text-[#1B4F72] transition-colors">
-              {isSignup
-                ? 'Already have an account? Sign in'
-                : "Don't have an account? Sign up"
-              }
+              {isSignup ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>
           </div>
         </div>
-
-        <p className="text-center text-xs text-gray-400 mt-6">
-          🔒 Your data is encrypted and never shared
-        </p>
+        <p className="text-center text-xs text-gray-400 mt-6">🔒 Your data is encrypted and never shared</p>
       </div>
     </div>
   )
