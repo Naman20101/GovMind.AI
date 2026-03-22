@@ -7,6 +7,7 @@ import {
   XCircle, Users, FileText, ArrowRight, Loader2
 } from 'lucide-react'
 import Link from 'next/link'
+import { supabase } from '@/lib/supabase'
 
 interface Session { name: string; email: string }
 interface LocalPermit {
@@ -44,21 +45,6 @@ export default function StatusPage() {
   const [permits, setPermits] = useState<LivePermit[]>([])
   const [loading, setLoading] = useState(true)
   const [searchId, setSearchId] = useState('')
-
-  useEffect(() => {
-    try {
-      const s = localStorage.getItem('govmind_session')
-      if (s) {
-        const parsed = JSON.parse(s)
-        setSession(parsed)
-        loadUserPermits(parsed.email)
-      } else {
-        setLoading(false)
-      }
-    } catch (_e) {
-      setLoading(false)
-    }
-  }, [])
 
   const loadUserPermits = async (email: string) => {
     setLoading(true)
@@ -101,6 +87,37 @@ export default function StatusPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    // ✅ Use Supabase auth
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        const user = data.session.user
+        const email = user.email || ''
+        const name = user.user_metadata?.name || email.split('@')[0] || 'User'
+        setSession({ name, email })
+        loadUserPermits(email)
+      } else {
+        setLoading(false)
+      }
+    })
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      if (s) {
+        const user = s.user
+        const email = user.email || ''
+        const name = user.user_metadata?.name || email.split('@')[0] || 'User'
+        setSession({ name, email })
+        loadUserPermits(email)
+      } else {
+        setSession(null)
+        setLoading(false)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   const handleSearch = () => {
     if (searchId.trim()) {
