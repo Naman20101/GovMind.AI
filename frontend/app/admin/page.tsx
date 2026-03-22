@@ -139,42 +139,36 @@ export default function AdminPage() {
     } catch (_e) { /* open without full data */ }
   }
 
-  const handleReview = async () => {
-    if (!modal) return
-    if (reason.length < 10) { setModalError('Reason must be at least 10 characters.'); return }
-    if (!reviewer.trim()) { setModalError('Please enter your name.'); return }
-
-    setSubmitting(true)
-    setModalError('')
-
-    try {
-      // ✅ Use dedicated /api/review/[id] route — completely separate from GET
-      const res = await fetch(`/api/review/${modal.permit.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          decision: modal.action,
-          reason,
-          reviewed_by: reviewer,
-        }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || data.detail || `Failed with status ${res.status}`)
-      }
-
-      setPermits(p =>
-        p.map(x => x.id === modal.permit.id ? { ...x, status: modal.action } : x)
-      )
-      setModal(null)
-    } catch (e) {
-      setModalError(e instanceof Error ? e.message : 'Submission failed. Please try again.')
-    } finally {
-      setSubmitting(false)
-    }
+const handleReview = async () => {
+  if (!modal) return
+  if (reason.length < 10) { setModalError('Reason must be at least 10 characters.'); return }
+  if (!reviewer.trim()) { setModalError('Please enter your name.'); return }
+  setSubmitting(true)
+  setModalError('')
+  try {
+    // ✅ Send ID in body — no URL params issues ever
+    const res = await fetch('/api/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: modal.permit.id,
+        decision: modal.action,
+        reason,
+        reviewed_by: reviewer,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed')
+    setPermits(p =>
+      p.map(x => x.id === modal.permit.id ? { ...x, status: modal.action } : x)
+    )
+    setModal(null)
+  } catch (e) {
+    setModalError(e instanceof Error ? e.message : 'Failed. Try again.')
+  } finally {
+    setSubmitting(false)
   }
+}
 
   const filteredPermits = filter ? permits.filter(p => p.status === filter) : permits
 
