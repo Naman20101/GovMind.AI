@@ -1,4 +1,8 @@
 import random
+import os
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+print(GROQ_API_KEY)  # debug
 from app.core.security import mask_pii
 from app.core.audit import log_audit_decision
 from app.services.extractor import extract_permit_data
