@@ -1,5 +1,8 @@
+
+'use client';
+
 import Link from 'next/link';
-import { Clock, ShieldCheck, ArrowRight, FileText, Bot, CheckCircle, Zap, Lock, Globe } from 'lucide-react';
+import { ArrowRight, Zap, Lock, Globe, Bot, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 
 export default function HomePage() {
@@ -8,8 +11,8 @@ export default function HomePage() {
 
   return (
     <div>
-      {/* HERO — Clean & Honest */}
-      <section className="hero-gradient relative overflow-hidden min-h-[90vh] flex items-center">
+      {/* HERO */}
+      <section className="hero-gradient relative overflow-hidden min-h-[90vh] flex items-center bg-[#0A2540]">
         <div className="absolute top-20 right-10 w-72 h-72 rounded-full bg-white/5 blur-3xl pointer-events-none" />
         <div className="absolute bottom-10 left-10 w-96 h-96 rounded-full bg-[#F39C12]/10 blur-3xl pointer-events-none" />
 
@@ -40,7 +43,7 @@ export default function HomePage() {
                 <select 
                   value={country} 
                   onChange={(e) => setCountry(e.target.value)}
-                  className="bg-white/10 backdrop-blur border border-white/30 text-white px-5 py-3 rounded-2xl text-base w-full min-w-[180px]"
+                  className="bg-white/10 backdrop-blur border border-white/30 text-white px-5 py-3 rounded-2xl text-base w-full min-w-[200px]"
                 >
                   <option value="UAE">🇦🇪 UAE (Dubai DED)</option>
                   <option value="India">🇮🇳 India (MCA)</option>
@@ -53,7 +56,7 @@ export default function HomePage() {
                 <select 
                   value={language} 
                   onChange={(e) => setLanguage(e.target.value)}
-                  className="bg-white/10 backdrop-blur border border-white/30 text-white px-5 py-3 rounded-2xl text-base w-full min-w-[180px]"
+                  className="bg-white/10 backdrop-blur border border-white/30 text-white px-5 py-3 rounded-2xl text-base w-full min-w-[200px]"
                 >
                   <option value="English">English</option>
                   <option value="Arabic">العربية (Arabic)</option>
@@ -80,12 +83,12 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Simple Stats */}
+      {/* Simple Honest Stats */}
       <section className="bg-white py-16">
         <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-3 gap-8">
           {[
             { icon: Bot, label: "Real Groq LLM", desc: "Llama-3.3-70B" },
-            { icon: ShieldCheck, label: "Full Audit Trail", desc: "Every step logged" },
+            { icon: ShieldCheck, label: "Full Audit Trail", desc: "Every decision logged" },
             { icon: Globe, label: "Multi-Country", desc: "UAE, India, USA rules" },
           ].map((item, i) => (
             <div key={i} className="flex gap-5 p-6 rounded-3xl border">
@@ -96,28 +99,6 @@ export default function HomePage() {
               </div>
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* How it Works */}
-      <section className="py-20 bg-[#F4F6F9]">
-        <div className="max-w-6xl mx-auto px-6 text-center">
-          <h2 className="text-4xl font-serif mb-4">How It Works</h2>
-          <p className="text-gray-600 max-w-md mx-auto mb-12">Upload → Real AI review → Auditable decision</p>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { num: "1", title: "Upload Documents", desc: "Select country & language" },
-              { num: "2", title: "Groq AI Reviews", desc: "Checks official rules instantly" },
-              { num: "3", title: "Get Decision + Trace", desc: "Always human-reversible" },
-            ].map((s, i) => (
-              <div key={i} className="bg-white p-8 rounded-3xl">
-                <div className="text-5xl font-bold text-[#F39C12] mb-4">{s.num}</div>
-                <h3 className="font-semibold mb-2">{s.title}</h3>
-                <p className="text-gray-600">{s.desc}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
     </div>
