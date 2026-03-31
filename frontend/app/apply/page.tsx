@@ -7,6 +7,7 @@ import {
   ChevronRight, ChevronLeft, Check, Lock,
   AlertCircle, Loader2, CheckCircle,
   AlertTriangle, Shield, Users, Info
+  AlertTriangle, Shield, Users, Info, X
 } from 'lucide-react'
 
 const API_BASE = '/api'
@@ -515,4 +516,3 @@ export default function ApplyPage() {
       )}
     </div>
   )
-}
