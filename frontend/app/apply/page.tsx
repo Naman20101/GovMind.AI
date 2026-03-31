@@ -4,25 +4,68 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Camera, Upload, ArrowRight } from 'lucide-react';
 
-const translations = { /* same as before — copy from my previous message if needed */ };
+const translations = {
+  English: {
+    title: "Apply for a Permit",
+    subtitle: "Get an AI-powered decision in minutes",
+    guestWarning: "You're applying as a guest. Sign in to save and track applications.",
+    businessInfo: "Business Info",
+    businessName: "Business Name",
+    permitType: "Permit Type",
+    ownerName: "Owner Name",
+    countryLabel: "Country",
+    scanBtn: "Scan with Camera",
+    uploadBtn: "Upload PDF",
+    nextBtn: "Continue",
+    uaeDocs: "Emirates ID, Trade License, Lease Contract, Insurance",
+    indiaDocs: "PAN, Aadhaar, DIN, Registered Office Proof",
+    usaDocs: "EIN, Passport/ID, State Registration, Address Proof",
+  },
+  Arabic: {
+    title: "التقدم بطلب تصريح",
+    subtitle: "احصل على قرار مدعوم بالذكاء الاصطناعي في دقائق",
+    guestWarning: "أنت تتقدم كضيف. سجل الدخول لحفظ طلباتك وتتبعها.",
+    businessInfo: "معلومات الأعمال",
+    businessName: "اسم العمل",
+    permitType: "نوع التصريح",
+    ownerName: "اسم المالك",
+    countryLabel: "الدولة",
+    scanBtn: "مسح بالكاميرا",
+    uploadBtn: "رفع PDF",
+    nextBtn: "المتابعة",
+    uaeDocs: "بطاقة الهوية الإماراتية، رخصة التجارة، عقد الإيجار، التأمين",
+    indiaDocs: "PAN، Aadhaar، DIN، إثبات المكتب المسجل",
+    usaDocs: "EIN، جواز السفر/الهوية، تسجيل الولاية، إثبات العنوان",
+  },
+  Hindi: {
+    title: "परमिट के लिए आवेदन करें",
+    subtitle: "मिनटों में AI-संचालित निर्णय प्राप्त करें",
+    guestWarning: "आप अतिथि के रूप में आवेदन कर रहे हैं। आवेदनों को सहेजने और ट्रैक करने के लिए साइन इन करें।",
+    businessInfo: "व्यवसाय जानकारी",
+    businessName: "व्यवसाय का नाम",
+    permitType: "परमिट प्रकार",
+    ownerName: "मालिक का नाम",
+    countryLabel: "देश",
+    scanBtn: "कैमरा से स्कैन करें",
+    uploadBtn: "PDF अपलोड करें",
+    nextBtn: "जारी रखें",
+    uaeDocs: "Emirates ID, ट्रेड लाइसेंस, लीज कॉन्ट्रैक्ट, इंश्योरेंस",
+    indiaDocs: "PAN, Aadhaar, DIN, रजिस्टर्ड ऑफिस प्रूफ",
+    usaDocs: "EIN, पासपोर्ट/ID, स्टेट रजिस्ट्रेशन, बिजनेस एड्रेस प्रूफ",
+  }
+};
 
 export default function ApplyPage() {
   const [country, setCountry] = useState('UAE');
   const [language, setLanguage] = useState('English');
-  const t = translations[language as keyof typeof translations];   // add translations object here same as homepage
+  const t = translations[language as keyof typeof translations];
 
-  const docsHint = country === 'UAE' ? "Emirates ID, Trade License, Lease, Insurance" : 
-                   country === 'India' ? "PAN, Aadhaar, DIN, Office Proof" : 
-                   "EIN, Passport/ID, State Registration, Address Proof";
+  const docsHint = country === 'UAE' ? t.uaeDocs : country === 'India' ? t.indiaDocs : t.usaDocs;
 
   const openCamera = () => {
-    // Real camera access (works on phone and laptop)
     navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
-        alert("Camera opened — point at your Emirates ID / Aadhaar / Passport (demo mode)");
-        // In real app you would show live video + capture button
-      })
-      .catch(() => alert("Camera access denied or not available"));
+      .then(() => alert("Camera opened — point at your ID document (demo)"))
+      .catch(() => alert("Camera access denied or not available on this device"));
   };
 
   return (
@@ -34,12 +77,12 @@ export default function ApplyPage() {
             <span className="font-semibold text-2xl text-[#1B4F72]">GovMind.AI</span>
           </Link>
           <div className="flex gap-3">
-            <select value={language} onChange={e => setLanguage(e.target.value)} className="px-4 py-2 border rounded-xl">
+            <select value={language} onChange={(e) => setLanguage(e.target.value)} className="px-4 py-2 border rounded-xl text-sm">
               <option value="English">English</option>
               <option value="Arabic">العربية</option>
               <option value="Hindi">हिंदी</option>
             </select>
-            <select value={country} onChange={e => setCountry(e.target.value)} className="px-4 py-2 border rounded-xl">
+            <select value={country} onChange={(e) => setCountry(e.target.value)} className="px-4 py-2 border rounded-xl text-sm">
               <option value="UAE">🇦🇪 UAE</option>
               <option value="India">🇮🇳 India</option>
               <option value="USA">🇺🇸 USA</option>
@@ -49,53 +92,55 @@ export default function ApplyPage() {
       </header>
 
       <div className="max-w-4xl mx-auto px-6 py-12">
-        <Link href="/" className="flex items-center gap-2 text-gray-500 mb-8"><ArrowLeft /> Back to Home</Link>
+        <Link href="/" className="flex items-center gap-2 text-gray-500 mb-8 hover:text-gray-700">
+          <ArrowLeft className="w-5 h-5" /> Back to Home
+        </Link>
 
-        <h1 className="text-4xl font-serif mb-2">{t.title || "Apply for a Permit"}</h1>
-        <p className="text-gray-600 mb-10">{t.subtitle || "Get an AI-powered decision in minutes"}</p>
-
-        {/* Progress steps */}
-        <div className="flex mb-12">
-          <div className="flex-1 text-center">
-            <div className="w-10 h-10 mx-auto bg-[#1B4F72] text-white rounded-full flex items-center justify-center font-bold">1</div>
-            <p className="mt-2 text-sm font-medium">Business Info</p>
-          </div>
-          <div className="flex-1 text-center opacity-40">
-            <div className="w-10 h-10 mx-auto bg-gray-300 text-gray-500 rounded-full flex items-center justify-center font-bold">2</div>
-            <p className="mt-2 text-sm">Location</p>
-          </div>
-          <div className="flex-1 text-center opacity-40">
-            <div className="w-10 h-10 mx-auto bg-gray-300 text-gray-500 rounded-full flex items-center justify-center font-bold">3</div>
-            <p className="mt-2 text-sm">Documents</p>
-          </div>
-        </div>
+        <h1 className="text-4xl font-serif text-[#1B4F72] mb-2">{t.title}</h1>
+        <p className="text-gray-600 mb-10">{t.subtitle}</p>
 
         <div className="bg-white rounded-3xl shadow p-8 md:p-12">
-          {/* Form fields ... keep your existing fields or add simple ones */}
+          <h2 className="text-2xl font-semibold mb-8">{t.businessInfo}</h2>
+
           <div className="space-y-8">
             <div>
-              <label className="block font-medium mb-2">Business Name</label>
-              <input type="text" className="w-full border border-gray-300 rounded-2xl px-6 py-4" placeholder="e.g. Acme Corporation" />
+              <label className="block text-sm font-medium mb-2">{t.businessName}</label>
+              <input type="text" className="w-full px-6 py-4 border border-gray-300 rounded-2xl focus:outline-none focus:border-[#1B4F72]" placeholder="e.g. Acme Corporation" />
             </div>
 
-            <div className="bg-blue-50 p-6 rounded-2xl">
-              <strong>Required for {country}:</strong><br />
+            <div>
+              <label className="block text-sm font-medium mb-2">{t.permitType}</label>
+              <select className="w-full px-6 py-4 border border-gray-300 rounded-2xl focus:outline-none focus:border-[#1B4F72]">
+                <option>Select permit type...</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">{t.ownerName}</label>
+              <input type="text" className="w-full px-6 py-4 border border-gray-300 rounded-2xl focus:outline-none focus:border-[#1B4F72]" placeholder="Full legal name" />
+            </div>
+
+            <div className="bg-blue-50 p-6 rounded-2xl text-sm">
+              <strong>Required Documents for {country}:</strong><br />
               {docsHint}
             </div>
 
-            <button onClick={openCamera} className="w-full bg-[#1B4F72] text-white py-4 rounded-2xl flex items-center justify-center gap-3 font-semibold hover:bg-[#0F3A5A]">
+            <button 
+              onClick={openCamera}
+              className="w-full flex items-center justify-center gap-3 bg-[#1B4F72] hover:bg-[#0F3A5A] text-white py-4 rounded-2xl font-semibold transition-all"
+            >
               <Camera className="w-6 h-6" />
-              Scan with Camera (Emirates ID / Aadhaar / Passport)
+              {t.scanBtn} (Emirates ID / Aadhaar / Passport)
             </button>
 
-            <button className="w-full border border-gray-300 py-4 rounded-2xl flex items-center justify-center gap-3 font-semibold hover:bg-gray-50">
+            <button className="w-full flex items-center justify-center gap-3 border border-gray-300 py-4 rounded-2xl font-semibold hover:bg-gray-50 transition-all">
               <Upload className="w-6 h-6" />
-              Upload PDF instead
+              {t.uploadBtn}
             </button>
           </div>
 
-          <button className="mt-12 w-full bg-[#F39C12] text-white py-5 rounded-2xl font-semibold text-lg hover:bg-[#E67E22]">
-            Continue to Next Step <ArrowRight className="inline ml-2" />
+          <button className="mt-12 w-full bg-[#F39C12] hover:bg-[#E67E22] text-white py-5 rounded-2xl font-semibold text-lg transition-all">
+            {t.nextBtn} <ArrowRight className="inline ml-2 w-5 h-5" />
           </button>
         </div>
       </div>
