@@ -466,28 +466,3 @@ export default function ApplyPage() {
 ```
 
 ---
-
-## COMMIT THIS ONE FILE ONLY
-
-| File | Action |
-|------|--------|
-| `frontend/app/apply/page.tsx` | Replace entirely |
-
----
-
-## HOW IT ALL WORKS NOW
-```
-User submits permit
-       ↓
-Result shows inline (no redirect)
-       ↓
-User clicks "Request Human Review"
-       ↓
-Sends to admin portal as HUMAN_REVIEW
-       ↓
-You (creator) open /admin
-       ↓
-See the application — click Approve/Reject
-       ↓
-Future: user gets email notification
-        (when login/signup added)
