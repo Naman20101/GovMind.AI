@@ -114,15 +114,20 @@ async def submit_permit(
     address: str = Form(...),
     permit_type: str = Form(...),
     applicant_email: str = Form(default=""),
+    country: str = Form("UAE"),
+    language: str = Form("English"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
+    # ... (keep all existing file save code)
+    
     validate_file(file)
     os.makedirs("/tmp/govbox", exist_ok=True)
     ext = "pdf" if file.content_type == "application/pdf" else "img"
     file_path = f"/tmp/govbox/{uuid.uuid4()}.{ext}"
 
     try:
+        review = auto_review_business_permit(file_path, country=country, language=language)
         contents = await file.read()
         with open(file_path, "wb") as f:
             f.write(contents)
