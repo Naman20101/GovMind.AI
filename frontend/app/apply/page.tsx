@@ -6,7 +6,7 @@ import {
   Building2, User, Hash, MapPin, FileUp,
   ChevronRight, ChevronLeft, Check, Lock,
   AlertCircle, Loader2, CheckCircle,
-  AlertTriangle, Shield, Users, Info, X   // ← Fixed: removed duplicate AlertTriangle and added missing X
+  AlertTriangle, Shield, Users, Info, X
 } from 'lucide-react'
 
 const API_BASE = '/api'
@@ -48,7 +48,7 @@ function HumanReviewButton({ permitId }: { permitId: string }) {
           reviewed_by: 'applicant',
         }),
       })
-    } catch (_e) { /* show success anyway */ }
+    } catch (_e) { }
     setSent(true)
     setSending(false)
   }
@@ -149,7 +149,6 @@ export default function ApplyPage() {
       const data = await res.json()
       if (!data?.id) throw new Error('No application ID returned')
 
-      // Save to user's local history
       if (session?.email) {
         const key = `govmind_permits_${session.email}`
         const existing = JSON.parse(localStorage.getItem(key) || '[]')
@@ -172,7 +171,7 @@ export default function ApplyPage() {
     }
   }
 
-  // Result page shown inline
+  // Result page
   if (result) {
     const isApproved = result.ai_decision === 'APPROVED'
 
@@ -211,8 +210,7 @@ export default function ApplyPage() {
                 <span className="font-semibold text-[#1B4F72]">{result.ai_confidence}%</span>
               </div>
               <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-[#1B4F72] rounded-full"
-                  style={{ width: `${result.ai_confidence}%` }} />
+                <div className="h-full bg-[#1B4F72] rounded-full" style={{ width: `${result.ai_confidence}%` }} />
               </div>
             </div>
           )}
@@ -298,12 +296,11 @@ export default function ApplyPage() {
         <h1 className="font-serif text-4xl text-[#1B4F72]">Apply for a Permit</h1>
         <p className="text-gray-500 mt-2">Get an AI-powered decision in minutes.</p>
 
-        {/* ✅ Login advisory for guests */}
         {showLoginBanner && (
           <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mt-4">
             <Info className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
-              <p className="text-sm text-amber-800 font-medium">You&apos;re applying as a guest</p>
+              <p className="text-sm text-amber-800 font-medium">You're applying as a guest</p>
               <p className="text-xs text-amber-700 mt-0.5">
                 <Link href="/login" className="underline font-medium">Sign in or create an account</Link>
                 {' '}to save your applications and track them later.
@@ -323,7 +320,6 @@ export default function ApplyPage() {
         )}
       </div>
 
-      {/* Steps */}
       <div className="flex items-center gap-0 mb-10">
         {STEPS.map((label, i) => (
           <div key={label} className="flex items-center flex-1 last:flex-none">
@@ -346,12 +342,11 @@ export default function ApplyPage() {
         ))}
       </div>
 
-      {/* Loading overlay */}
       {loading && (
         <div className="bg-white rounded-2xl shadow-card p-12 text-center">
           <Loader2 className="w-12 h-12 text-[#1B4F72] animate-spin mx-auto mb-4" />
           <p className="text-[#1B4F72] font-semibold text-lg">{loadingMsg}</p>
-          <p className="text-gray-400 text-sm mt-2">Please don&apos;t close this page</p>
+          <p className="text-gray-400 text-sm mt-2">Please don't close this page</p>
           <div className="mt-6 h-2 bg-gray-100 rounded-full overflow-hidden">
             <div className="h-full bg-[#1B4F72] rounded-full animate-pulse" style={{ width: '60%' }} />
           </div>
