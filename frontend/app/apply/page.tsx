@@ -171,7 +171,6 @@ export default function ApplyPage() {
     }
   }
 
-  // Result page
   if (result) {
     const isApproved = result.ai_decision === 'APPROVED'
 
